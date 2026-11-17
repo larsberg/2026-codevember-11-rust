@@ -64,11 +64,47 @@ test('automatic gun sweeps real surface UVs and emits visible laser lines and sp
   assert.ok(first?.uv && next?.uv);assert.ok(first.uv.distanceTo(next.uv)>.02);
   view.setTarget(first,true);view.update(null,.1,true);
   assert.ok(view.mask.cleaned>0);assert.equal(view.group.getObjectByName('Laser scan lines').visible,true);
-  assert.equal(view.group.getObjectByName('Laser core').visible,true);
+  assert.equal(view.group.getObjectByName('Flat laser fan').visible,true);
   const lines=view.group.getObjectByName('Laser scan lines').geometry.attributes.position.array;
   assert.ok(lines.some(v=>Math.abs(v)>.1));
   view.setTarget(null,false);view.update(null,0,false);
   assert.equal(view.group.getObjectByName('Laser scan lines').visible,false);
   assert.equal(settings.rust.growth,.036);assert.equal(settings.bloom.enabled,true);
+  view.dispose();sim.dispose();
+});
+
+
+test('the flat fan cleans a wide strip while leaving metal above and below untouched', () => {
+  const geometry=createRustGeometry(5,.24),mask=new RustMask(geometry,1);
+  const mesh=new Mesh(geometry,new MeshBasicMaterial());mesh.updateMatrixWorld();
+  const sample=(x,y)=>new Raycaster(new Vector3(x,y,8),new Vector3(0,0,-1)).intersectObject(mesh)[0];
+  const center=sample(0,0),side=sample(1,0),above=sample(0,.4);
+  mask.step(.5,0,{localPoint:center.point,localNormal:center.face.normal,fanTangent:new Vector3(1,0,0),fanHalfWidth:1.4},.084,4);
+  assert.equal(mask.valueAt(center.uv),0);assert.equal(mask.valueAt(side.uv),0);assert.equal(mask.valueAt(above.uv),1);
+  mask.dispose();geometry.dispose();mesh.material.dispose();
+});
+
+test('fan rotates across the surface trajectory and clips every emitted ray to a real hit', async () => {
+  await initPhysics();const settings=defaultSetup();settings.rust.radius=.8;
+  const sim=new RustSimulation(settings),view=createRustView(new Scene(),sim);
+  view.configure(settings);view.update(null);
+  const axes=[];let clipped=false;
+  for(const time of [0,2,5,9,14]) {
+    const hit=view.automaticTarget(time);assert.ok(hit);
+    view.setTarget(hit,true);view.update(null,0,true);
+    const travel=hit.travelDirection.clone().addScaledVector(hit.localNormal,-hit.travelDirection.dot(hit.localNormal)).normalize();
+    assert.ok(Math.abs(travel.dot(hit.fanTangent))<1e-8);
+    axes.push(hit.fanTangent.clone());
+    const lines=view.group.getObjectByName('Laser scan lines').geometry;
+    const data=lines.attributes.position;clipped ||= lines.drawRange.count<50;
+    for(let i=0;i<lines.drawRange.count;i+=2) {
+      const start=new Vector3().fromBufferAttribute(data,i),end=new Vector3().fromBufferAttribute(data,i+1);
+      const impact=new Raycaster(start,end.clone().sub(start).normalize()).intersectObject(view.cube)[0];
+      assert.ok(impact,'no ray may terminate in empty space');
+      assert.ok(impact.point.distanceTo(end)<.01,'ray stops at the first surface');
+    }
+  }
+  assert.ok(clipped,'oversized fan discards rays outside the cube');
+  assert.ok(axes.some(axis=>Math.abs(axis.dot(axes[0]))<.95),'fan changes orientation during turns');
   view.dispose();sim.dispose();
 });

@@ -36,8 +36,8 @@ const scene = new Scene(); scene.background = new Color(settings.studio.backgrou
 const camera = new PerspectiveCamera(42, innerWidth / innerHeight, .1, 300);
 const orbit = new OrbitControls(camera, canvas);
 configureOrbitInputs(orbit);
-orbit.mouseButtons = { LEFT: null, MIDDLE: MOUSE.PAN, RIGHT: MOUSE.ROTATE };
-orbit.enablePan = true; orbit.touches = { ONE: null, TWO: TOUCH.DOLLY_ROTATE };
+orbit.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN };
+orbit.enablePan = true; orbit.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
 orbit.minDistance = 5; orbit.maxDistance = 60; orbit.minPolarAngle = .09; orbit.maxPolarAngle = Math.PI - .09;
 orbit.enableDamping = true; orbit.dampingFactor = .07;
 const focus = new Vector3(), follow = createCameraFollow();
@@ -162,36 +162,14 @@ lightingControls = bindLightingControls(controls.element, light, hemisphere, edi
   effects.configure, () => {}, settings.lighting, spotlight, fill);
 configure(true);
 if (setupLoadError) controls.status(setupLoadError, true);
-const pointer = { x: 0, y: 0, inside: false, down: false, id: null };
-function releaseLaser() {
-  // May run during the first rebuild before the pointer is initialized.
-  if (typeof surface !== 'undefined') surface?.setTarget(null, false);
-}
+function releaseLaser() { surface?.setTarget(null, false); }
 function targetLaser() {
-  const manual = pointer.down && pointer.inside;
-  const hit = manual ? surface.pick(pointer.x, pointer.y, canvas.getBoundingClientRect(), camera) : surface.automaticTarget(simulation.time);
-  surface.setTarget(hit, settings.motion.playing && !document.hidden);
+  surface.setTarget(surface.automaticTarget(simulation.time), settings.motion.playing && !document.hidden);
 }
-canvas.addEventListener('pointermove', event => {
-  pointer.x=event.clientX; pointer.y=event.clientY; pointer.inside=true;
-});
-canvas.addEventListener('pointerdown', event => {
-  if(event.button!==0 || (event.pointerType==='touch' && !event.isPrimary)) return;
-  pointer.x=event.clientX;pointer.y=event.clientY;pointer.inside=true;pointer.down=true;pointer.id=event.pointerId;
-  canvas.setPointerCapture(event.pointerId); targetLaser();
+// Pointer gestures belong entirely to OrbitControls. A gesture may unlock audio.
+canvas.addEventListener('pointerdown', () => {
   if(settings.audio.enabled) void audio.unlock().catch(error=>controls.status(error.message,true));
 });
-function endLaser(event) {
-  if(pointer.id!==null && event.pointerId!==pointer.id)return;
-  pointer.down=false;pointer.id=null; releaseLaser();
-  audio.update(0,false);
-}
-canvas.addEventListener('pointerup',endLaser);
-canvas.addEventListener('pointercancel',endLaser);
-canvas.addEventListener('lostpointercapture',endLaser);
-canvas.addEventListener('pointerleave',()=>{pointer.inside=false;releaseLaser();audio.update(0,false);});
-canvas.addEventListener('contextmenu',event=>event.preventDefault());
-window.addEventListener('blur',()=>{pointer.down=false;pointer.inside=false;releaseLaser();audio.update(0,false);});
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false); effects.resize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight;
   camera.fov = innerWidth < innerHeight ? 50 : 42;
@@ -220,7 +198,7 @@ renderer.setAnimationLoop(now => {
   orbit.update(); render(); controls.frame(simulation.stats, audio.modulation);
 });
 document.addEventListener('visibilitychange', () => {
-  previous = performance.now(); wasRunning = false; pointer.down=false; releaseLaser();
+  previous = performance.now(); wasRunning = false; releaseLaser();
   audio.update(0, false);
 });
 window.addEventListener('pagehide', () => {

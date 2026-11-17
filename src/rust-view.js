@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, BufferAttribute, BufferGeometry, Color, CylinderGeometry, EdgesGeometry, Float32BufferAttribute,
+  AdditiveBlending, DoubleSide, BufferAttribute, BufferGeometry, Color, CylinderGeometry, EdgesGeometry, Float32BufferAttribute,
   Group, LineBasicMaterial, LineDashedMaterial, LineSegments, Mesh, MeshBasicMaterial, MeshStandardMaterial,
   PointLight, Points, PointsMaterial, Raycaster, TorusGeometry, Vector2, Vector3,
 } from 'three';
@@ -68,9 +68,14 @@ export function createRustView(scene, simulation) {
   const guides = new LineSegments(guideGeometry,guideMaterial); guides.computeLineDistances(); group.add(guides);
   const laserMaterial = new MeshBasicMaterial({ color: new Color(7,1.25,.18), transparent:true, opacity:.8, blending:AdditiveBlending, depthWrite:false });
   const beam = new Mesh(new CylinderGeometry(.018,.026,1,8),laserMaterial); beam.name='Laser core'; group.add(beam);
-  const fanPositions=new Float32Array(9*6),fanGeometry=new BufferGeometry();
+  const FAN_RAYS=25;
+  const fanPositions=new Float32Array(FAN_RAYS*6),fanGeometry=new BufferGeometry();
   fanGeometry.setAttribute('position',new BufferAttribute(fanPositions,3));
   const fanMaterial=new LineBasicMaterial({color:new Color(4,.7,.12),transparent:true,opacity:.4,blending:AdditiveBlending,depthWrite:false});
+  const sheetGeometry=new BufferGeometry(),sheetPositions=new Float32Array((FAN_RAYS-1)*9);
+  sheetGeometry.setAttribute('position',new BufferAttribute(sheetPositions,3));
+  const sheetMaterial=new MeshBasicMaterial({color:new Color(3,.45,.06),transparent:true,opacity:.075,side:DoubleSide,blending:AdditiveBlending,depthWrite:false});
+  const sheet=new Mesh(sheetGeometry,sheetMaterial);sheet.name='Flat laser fan';sheet.frustumCulled=false;group.add(sheet);
   const fan=new LineSegments(fanGeometry,fanMaterial);fan.name='Laser scan lines';fan.frustumCulled=false;group.add(fan);
   const ring = new Mesh(new TorusGeometry(1,.014,6,48),laserMaterial); group.add(ring);
   const head = new Group(); group.add(head);
@@ -87,6 +92,7 @@ export function createRustView(scene, simulation) {
   const sparks=new Points(particleGeometry,particleMaterial); sparks.frustumCulled=false; group.add(sparks); let particleCursor=0, emission=0;
   for(let i=0;i<particleCount;i++) positions[i*3+1]=-100;
   let settings=simulation.settings, hit=null, active=false, disposed=false, lastUv=null;
+  const fanImpacts=[];
   const caster=new Raycaster(), ndc=new Vector2(), up=new Vector3(0,1,0), normal=new Vector3(), origin=new Vector3(), delta=new Vector3();
   function configure(next,palette) {
     settings=next;
@@ -117,34 +123,65 @@ export function createRustView(scene, simulation) {
     return { ...intersection,localPoint,localNormal };
   }
   function automaticTarget(seconds) {
-    // Aim at the actual Box3D pose; a slow orbital approach scans adjacent faces.
+    // Sample the real surface trajectory on either side of the current time.
+    // Its tangent controls the fan rotation even at the first frame or a turn.
     cube.updateWorldMatrix(true,false);
-    const size=settings.rust.size, t=seconds;
-    const aim=new Vector3(Math.sin(t*.85)*size*.35,Math.sin(t*.17)*size*.34,0);
-    const azimuth=.28+Math.sin(t*.065)*.65;
-    const approach=new Vector3(Math.sin(azimuth),.22+.18*Math.sin(t*.11),Math.cos(azimuth)).normalize();
-    const start=cube.localToWorld(aim.clone().addScaledVector(approach,size*2));
-    const end=cube.localToWorld(aim);
-    caster.set(start,end.sub(start).normalize());
-    return intersectionHit();
+    const size=settings.rust.size;
+    function sample(t) {
+      const aim=new Vector3(Math.sin(t*.85)*size*.17,Math.sin(t*.17)*size*.34,0);
+      const azimuth=.28+Math.sin(t*.065)*.65;
+      const approach=new Vector3(Math.sin(azimuth),.22+.18*Math.sin(t*.11),Math.cos(azimuth)).normalize();
+      const start=cube.localToWorld(aim.clone().addScaledVector(approach,size*2));
+      const end=cube.localToWorld(aim);
+      caster.set(start,end.sub(start).normalize());
+      return intersectionHit();
+    }
+    const next=sample(seconds),before=sample(seconds-.015),after=sample(seconds+.015);
+    if(next && before && after)next.travelDirection=after.localPoint.clone().sub(before.localPoint);
+    return next;
   }
   function setTarget(next,working) {
     if(next && hit && active && working && hit.localNormal.dot(next.localNormal)>.3 && hit.localPoint.distanceTo(next.localPoint)<settings.rust.size*.5)next.previousLocalPoint=hit.localPoint;
-    hit=next; active=!!next&&working; if(next)lastUv=next.uv.toArray();
+    hit=next; active=!!next&&working;
+    if(next) {
+      lastUv=next.uv.toArray();
+      const travel=next.travelDirection?.clone() ?? (next.previousLocalPoint ? next.localPoint.clone().sub(next.previousLocalPoint) : up.clone());
+      travel.addScaledVector(next.localNormal,-travel.dot(next.localNormal));
+      if(travel.lengthSq()<1e-12)travel.copy(Math.abs(next.localNormal.y)>.9?new Vector3(0,0,1):up);
+      next.fanTangent=new Vector3().crossVectors(next.localNormal,travel.normalize()).normalize();
+      next.fanHalfWidth=settings.rust.radius*5;
+    }
   }
   function update(camera,dt=0,running=false) {
     cube.position.copy(simulation.object.position);cube.quaternion.copy(simulation.object.quaternion); cube.updateMatrixWorld(true);
-    if(running&&dt>0)mask.step(dt,settings.rust.growth,active?hit:null,settings.rust.radius,settings.rust.power);
-    head.visible=!!hit; beam.visible=ring.visible=fan.visible=active&&running;
+    if(running&&dt>0)mask.step(dt,settings.rust.growth,active?hit:null,Math.max(.055,settings.rust.radius*.3),settings.rust.power);
+    head.visible=!!hit; beam.visible=ring.visible=false;fan.visible=sheet.visible=active&&running;
     if(hit) {
       normal.copy(hit.localNormal).applyQuaternion(cube.quaternion);
-      const tangent=new Vector3().crossVectors(normal,Math.abs(normal.y)>.9?new Vector3(0,0,1):up).normalize();
+      const tangent=hit.fanTangent.clone().applyQuaternion(cube.quaternion);
       origin.copy(hit.point).addScaledVector(normal,1.9).addScaledVector(tangent,.85);
       head.position.copy(origin);head.quaternion.setFromUnitVectors(up,delta.copy(origin).sub(hit.point).normalize());
-      for(let i=0;i<9;i++) {
-        origin.toArray(fanPositions,i*6);
-        hit.point.clone().addScaledVector(normal,.012).addScaledVector(tangent,(i/8-.5)*settings.rust.radius*1.7).toArray(fanPositions,i*6+3);
+      fanImpacts.length=0;
+      let rayCount=0,triangleCount=0,previousImpact=null;
+      for(let i=0;i<FAN_RAYS;i++) {
+        const aim=hit.point.clone().addScaledVector(tangent,(i/(FAN_RAYS-1)-.5)*hit.fanHalfWidth*2);
+        caster.set(origin,aim.clone().sub(origin).normalize());
+        const impact=caster.intersectObject(cube,false)[0];
+        if(!impact) { previousImpact=null; continue; }
+        const impactNormal=impact.face.normal.clone().applyQuaternion(cube.quaternion).normalize();
+        const end=impact.point.clone().addScaledVector(impactNormal,.003);
+        origin.toArray(fanPositions,rayCount*6);end.toArray(fanPositions,rayCount*6+3);rayCount++;
+        fanImpacts.push({point:impact.point.clone(),normal:impactNormal});
+        // A missed ray breaks the sheet; never bridge across empty space.
+        if(previousImpact) {
+          const k=triangleCount++*9;
+          origin.toArray(sheetPositions,k);previousImpact.toArray(sheetPositions,k+3);end.toArray(sheetPositions,k+6);
+        }
+        previousImpact=end;
       }
+      fanGeometry.setDrawRange(0,rayCount*2);
+      sheetGeometry.setDrawRange(0,triangleCount*3);
+      sheetGeometry.attributes.position.needsUpdate=true;
       fanGeometry.attributes.position.needsUpdate=true;
       delta.copy(origin).sub(hit.point);beam.position.copy(origin).lerp(hit.point,.5);beam.scale.y=delta.length();beam.quaternion.setFromUnitVectors(up,delta.normalize());
       ring.position.copy(hit.point).addScaledVector(normal,.008);ring.quaternion.setFromUnitVectors(new Vector3(0,0,1),normal);ring.scale.setScalar(settings.rust.radius);
@@ -155,8 +192,10 @@ export function createRustView(scene, simulation) {
       emission+=active?dt*420:0;
       while(emission>=1&&hit) {
         const i=particleCursor++%particleCount,k=i*3; emission--;
-        const p=hit.point.clone().addScaledVector(normal,.035);p.toArray(positions,k);
-        const v=new Vector3((Math.random()-.5)*3.5,Math.random()*2.8,(Math.random()-.5)*3.5).addScaledVector(normal,1.4+Math.random()*2.4);v.toArray(velocities,k);lives[i]=.15+Math.random()*.35;
+        if(!fanImpacts.length)continue;
+        const impact=fanImpacts[Math.floor(Math.random()*fanImpacts.length)];
+        impact.point.clone().addScaledVector(impact.normal,.035).toArray(positions,k);
+        const v=new Vector3((Math.random()-.5)*3.5,Math.random()*2.8,(Math.random()-.5)*3.5).addScaledVector(impact.normal,1.4+Math.random()*2.4);v.toArray(velocities,k);lives[i]=.15+Math.random()*.35;
       }
       for(let i=0;i<particleCount;i++) {
         const k=i*3;lives[i]-=dt;
@@ -171,8 +210,8 @@ export function createRustView(scene, simulation) {
     }
   }
   return { group,cube,mask,materials,configure,update,pick,automaticTarget,setTarget,
-    get working(){return active;}, get diagnostics(){return { coverage:mask.coverage, cleaned:mask.cleaned, lastUv, working:active, maskSize:[mask.texture.image.width,mask.texture.image.height] };},
-    dispose(){if(disposed)return;disposed=true;scene.remove(group);mask.dispose();outline.geometry.dispose();ink.dispose();guideGeometry.dispose();guideMaterial.dispose();particleGeometry.dispose();particleMaterial.dispose();fanGeometry.dispose();fanMaterial.dispose();streakGeometry.dispose();
+    get working(){return active;}, get diagnostics(){return { coverage:mask.coverage, cleaned:mask.cleaned, lastUv, working:active, fanRays:fanGeometry.drawRange.count/2, maskSize:[mask.texture.image.width,mask.texture.image.height] };},
+    dispose(){if(disposed)return;disposed=true;scene.remove(group);mask.dispose();outline.geometry.dispose();ink.dispose();guideGeometry.dispose();guideMaterial.dispose();particleGeometry.dispose();particleMaterial.dispose();fanGeometry.dispose();fanMaterial.dispose();sheetGeometry.dispose();sheetMaterial.dispose();streakGeometry.dispose();
       for(const mesh of [beam,ring,barrel,collar,housing])mesh.geometry.dispose();laserMaterial.dispose();Object.values(materials).forEach(m=>m.dispose());}
   };
 }

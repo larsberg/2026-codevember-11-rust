@@ -66,7 +66,11 @@ export class RustMask {
       if (center) {
         const k = i * 3;
         const t = length2 > 1e-12 ? Math.max(0,Math.min(1,((this.points[k]-previous.x)*vx+(this.points[k+1]-previous.y)*vy+(this.points[k+2]-previous.z)*vz)/length2)) : 1;
-        const dx = this.points[k] - (previous.x+vx*t), dy = this.points[k+1] - (previous.y+vy*t), dz = this.points[k+2] - (previous.z+vz*t);
+        let dx = this.points[k] - (previous.x+vx*t), dy = this.points[k+1] - (previous.y+vy*t), dz = this.points[k+2] - (previous.z+vz*t);
+        if(hit.fanTangent) {
+          const axis=hit.fanTangent, along=Math.max(-hit.fanHalfWidth,Math.min(hit.fanHalfWidth,dx*axis.x+dy*axis.y+dz*axis.z));
+          dx-=axis.x*along;dy-=axis.y*along;dz-=axis.z*along;
+        }
         const d2 = dx * dx + dy * dy + dz * dz;
         if (d2 < r2 && this.normals[k] * normal.x + this.normals[k + 1] * normal.y + this.normals[k + 2] * normal.z > .15) {
           const weight = 1 - d2 / r2, before = amount;

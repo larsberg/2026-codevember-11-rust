@@ -44,7 +44,7 @@
   },
   "audio": {
     "enabled": true,
-    "volume": 0.3,
+    "volume": 0,
     "tempo": 120,
     "voices": [
       {
@@ -249,8 +249,8 @@
     "fps": false
   },
   "camera": {
-    "yaw": 28,
-    "elevation": 28,
+    "yaw": -20.9590592334,
+    "elevation": 6.5387630662,
     "distance": 15,
     "offsetX": 0,
     "offsetY": 0,
