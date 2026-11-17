@@ -16,6 +16,7 @@ import { createControls } from './controls.js';
 import { defaultSetup, validateSetup, DEFAULT_CAMERA } from './settings.js';
 import { requestSetup } from './persistence.js';
 import { libraryPalettes } from './palette-library.js';
+import { createSpotlightFloorMaterial,updateSpotlightFloor } from './spotlight-floor.js';
 import { createPaperFloor, createShadowFollow } from './shadows.js';
 import { bindLightingControls } from './lighting-controls.js';
 import { bindMaterialControls } from './material-controls.js';
@@ -38,7 +39,7 @@ const orbit = new OrbitControls(camera, canvas);
 configureOrbitInputs(orbit);
 orbit.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN };
 orbit.enablePan = true; orbit.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
-orbit.minDistance = 5; orbit.maxDistance = 60; orbit.minPolarAngle = .09; orbit.maxPolarAngle = Math.PI - .09;
+orbit.minDistance = 5; orbit.maxDistance = 600; orbit.minPolarAngle = .09; orbit.maxPolarAngle = Math.PI - .09;
 orbit.enableDamping = true; orbit.dampingFactor = .07;
 const focus = new Vector3(), follow = createCameraFollow();
 const pmrem = new PMREMGenerator(renderer), room = new RoomEnvironment();
@@ -56,20 +57,21 @@ function configureEnvironment() {
 const hemisphere = new HemisphereLight('#fff8ed', '#7e8b9d', 1.4); scene.add(hemisphere);
 const light = new DirectionalLight('#fff5df', 3.1);
 light.position.set(-8, 18, 10); light.castShadow = true; light.shadow.mapSize.set(2048, 2048);
-Object.assign(light.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: .5, far: 90 });
+Object.assign(light.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: .5, far: 900 });
 light.shadow.camera.updateProjectionMatrix();
 light.shadow.bias = -.00015; light.shadow.normalBias = .04; light.shadow.radius = 3;
 scene.add(light, light.target);
 const lightOffset = new Vector3();
 const followShadow = createShadowFollow(light, () => { const l = settings.lighting.directional; return lightOffset.set(l.offsetX, l.height, l.offsetZ); });
 const fill = new DirectionalLight('#c0e4ff', 1.1); fill.position.set(12, 8, -10);
-fill.shadow.mapSize.set(2048, 2048); Object.assign(fill.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: .5, far: 90 });
+fill.shadow.mapSize.set(2048, 2048); Object.assign(fill.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: .5, far: 900 });
 fill.shadow.camera.updateProjectionMatrix();
 scene.add(fill, fill.target);
-const spotlight = new SpotLight(); spotlight.shadow.mapSize.set(2048, 2048);
-spotlight.shadow.camera.near = .1; spotlight.shadow.camera.far = 100; scene.add(spotlight, spotlight.target);
+const spotlight = new SpotLight(); spotlight.shadow.mapSize.set(4096, 4096);
+spotlight.shadow.camera.near = 1; spotlight.shadow.camera.far = 240; scene.add(spotlight, spotlight.target);
 const effects = createSceneEffects(renderer, scene, camera, { clampBeauty: false });
-const floor = createPaperFloor(settings.studio.background); scene.add(floor); floor.layers.enable(1);
+const floor = createPaperFloor(settings.studio.background);floor.material.dispose();
+floor.material=createSpotlightFloorMaterial();scene.add(floor); floor.layers.enable(1);
 const palette = () => libraryPalettes(settings.paletteLibrary).find(p => p.id === settings.paletteId);
 const plate = createDrawingPlate();
 const audio = createAudio({ synthLevel: .35, synthMaxVoices: 8, modulationHz: 30,
@@ -81,29 +83,28 @@ function rebuild() {
   releaseLaser(); surface?.dispose(); simulation?.dispose();
   simulation = next; surface = createRustView(scene, simulation);
   rigKey = keyForRig(); revision++;
-  floor.position.y = simulation.floor - .05;
+  floor.position.y = simulation.floor;
   simulation.getCenter(focus); follow.reset(focus);
   applyCameraView(settings.camera, camera, orbit, follow.position);
   surface.configure(settings, palette()); surface.update(camera);
 }
 function configure(restoreCamera = false) {
   if (rigKey !== keyForRig()) rebuild(); else simulation.configure(settings);
-  scene.background.set(settings.studio.background); floor.material.uniforms.paperColor.value.set(settings.studio.background);
-  floor.material.uniforms.color.value.set(settings.studio.background).multiplyScalar(.2);
+  scene.background.set(settings.studio.background); floor.material.color.set('#454545');
   materialControls?.set(settings.materials);
   configureEnvironment();
   surface.configure(settings, palette());
   audio.update(0, settings.motion.playing && !document.hidden && surface.working, simulation.position.subarray(0, 48), simulation.floor); audio.configure(settings.audio);
   lightingControls?.set(settings.lighting);
   renderer.toneMappingExposure = settings.studio.exposure;
-  floor.material.uniforms.opacity.value = settings.studio.shadowOpacity;
+  for(const source of [light,fill,spotlight])source.shadow.intensity=Math.min(1,settings.studio.shadowOpacity/.24);
   effects.configure(settings.lighting.occlusion); effects.configureBloom(settings.bloom); effects.configureFocus(settings.focus);
   if (restoreCamera) applyCameraView(settings.camera, camera, orbit, follow.position);
   controls?.set(settings);
 }
 function render() {
   surface.update(camera,0,settings.motion.playing && !document.hidden);
-  lightingControls?.updatePosition(follow.position); followShadow(follow.position); effects.render(follow.position);
+  lightingControls?.updatePosition(follow.position); updateSpotlightFloor(floor.material,spotlight); followShadow(follow.position); effects.render(follow.position);
   plate.render(renderer, settings);
 }
 function togglePlaying() {
@@ -183,7 +184,7 @@ renderer.setAnimationLoop(now => {
   if (running) {
     const start = performance.now(); simulation.update(dt); simulationMilliseconds = performance.now() - start;
   }
-  surface.update(camera); targetLaser();
+  targetLaser();
   surface.update(camera,dt,running);
   const working = running && surface.working;
   const events=[];
@@ -194,7 +195,7 @@ renderer.setAnimationLoop(now => {
   audio.update(dt,working,simulation.position,simulation.floor,events);
   wasRunning = running; previous = now;
   simulation.getCenter(focus);
-  if (running) follow.update(camera, orbit, focus, true, surface.working, dt, .45);
+  if (running) follow.update(camera, orbit, focus, true, false, dt, .45);
   orbit.update(); render(); controls.frame(simulation.stats, audio.modulation);
 });
 document.addEventListener('visibilitychange', () => {

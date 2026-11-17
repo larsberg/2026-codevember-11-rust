@@ -41,16 +41,16 @@ test('shared setup survives a subject rebuild, material and environment edits ap
     assert.equal(view.materials.panels.envMapIntensity,1.7);
     assert.equal(view.materials.struts.color.getHexString(),'b35a22');
     for(let j=0;j<120;j++)sim.update(1/60);
-    assert.ok(Math.abs(sim.object.position.y-settings.rust.size/2)<.03);
+    assert.ok(sim.center.y>0 && sim.center.y<settings.rust.chamfer*3);
     assert.ok(sim.entry.body.getMass()>0);assert.equal(sim.stats.physicsEngine,'Box3D');
-    view.dispose();sim.dispose();settings.rust.size=6;
+    view.dispose();sim.dispose();settings.rust.size=80;
   }
 });
 
 test('legacy saves acquire Rust defaults while retaining shared edits; invalid mask controls reject', () => {
   const legacy={version:17,studio:{background:'#eeeecc',exposure:1.2},camera:{yaw:45},audio:{enabled:false},fold:{sections:10}};
   const setup=validateSetup(legacy);
-  assert.equal(setup.rust.size,5);assert.equal(setup.studio.background,'#eeeecc');assert.equal(setup.camera.yaw,45);assert.equal(setup.audio.enabled,false);
+  assert.equal(setup.rust.size,70);assert.equal(setup.studio.background,'#eeeecc');assert.equal(setup.camera.yaw,45);assert.equal(setup.audio.enabled,false);
   assert.deepEqual(validateSetup(JSON.parse(JSON.stringify(setup))),setup);
   assert.throws(()=>validateSetup({...setup,rust:{...setup.rust,power:NaN}}));
   assert.equal(defaultSetup().studio.exposure,.9);
@@ -107,4 +107,61 @@ test('fan rotates across the surface trajectory and clips every emitted ray to a
   assert.ok(clipped,'oversized fan discards rays outside the cube');
   assert.ok(axes.some(axis=>Math.abs(axis.dot(axes[0]))<.95),'fan changes orientation during turns');
   view.dispose();sim.dispose();
+});
+
+test('seven physics bones bend the skin, recoil locally and return together toward the origin',async()=>{
+ await initPhysics();const settings=defaultSetup(),sim=new RustSimulation(settings),view=createRustView(new Scene(),sim);
+ assert.equal(sim.rig.length,7);assert.equal(sim.physics.joints.length,6);assert.equal(view.cube.isSkinnedMesh,true);
+ assert.ok(sim.geometry.attributes.skinIndex && sim.geometry.attributes.skinWeight);
+ const vertex=sim.geometry.attributes.position.count/2|0,rest=view.cube.getVertexPosition(vertex,new Vector3()).clone();
+ for(let i=0;i<180;i++)sim.update(1/60);
+ view.update(null);
+ assert.ok(view.cube.getVertexPosition(vertex,new Vector3()).distanceTo(rest)>.1);
+ assert.ok(sim.bones.some(b=>b.quaternion.angleTo(sim.bones[0].quaternion)>.03));
+ const target=sim.rig[3],point=new Vector3().copy(target.body.getPosition()).add(new Vector3(0,0,sim.radius));
+ const before=target.body.getLinearVelocity().z;sim.laserStrike(point,new Vector3(0,0,1),1/30,4);
+ assert.ok(target.body.getLinearVelocity().z<before-.01);assert.equal(sim.recoilImpulses,1);
+ for(const r of sim.rig){const p=r.body.getPosition();r.body.setTransform({x:p.x+50,y:p.y,z:p.z},r.body.getRotation());r.body.setLinearVelocity({x:0,y:0,z:0});}
+ sim.sync();const offset=sim.center.x;
+ for(let i=0;i<240;i++)sim.update(1/60);
+ assert.ok(Math.abs(sim.center.x)<Math.abs(offset)*.9);
+ view.dispose();sim.dispose();
+});
+
+test('spark bodies fall onto the floor and leave persistent dust while the noisy fan animates',async()=>{
+ await initPhysics();const sim=new RustSimulation(defaultSetup()),view=createRustView(new Scene(),sim);
+ view.configure(sim.settings);view.update(null);view.setTarget(view.automaticTarget(0),true);view.update(null,.02,true);
+ const first=Array.from(view.group.getObjectByName('Laser scan lines').geometry.attributes.position.array);
+ sim.update(1/60);view.update(null,0,true);
+ const next=Array.from(view.group.getObjectByName('Laser scan lines').geometry.attributes.position.array);
+ assert.ok(next.some((v,i)=>Math.abs(v-first[i])>1e-4));
+ view.setTarget(null,false);
+ for(let i=0;i<240;i++){sim.update(1/60);view.update(null,1/60,true);}
+ assert.ok(view.diagnostics.dust>0);
+ const points=view.group.getObjectByName('Settled rust dust').geometry.attributes.position;
+ assert.ok(Math.abs(points.getY(0)-sim.floor-.016*sim.scale)<1e-6);
+ view.dispose();sim.dispose();
+});
+
+
+test('v1 capsule settings migrate to ten times the size once, preserving mute and studio edits',()=>{
+ const old={...defaultSetup(),version:1,rust:{...defaultSetup().rust,size:7,chamfer:.65},camera:{...defaultSetup().camera,distance:15},physics:{...defaultSetup().physics,gravity:9.8}};
+ old.lighting.spotlight={...old.lighting.spotlight,intensity:850,offsetX:-3,height:8,offsetZ:5};old.audio.enabled=false;
+ const next=validateSetup(old);assert.equal(next.rust.size,70);assert.equal(next.rust.chamfer,6.5);assert.equal(next.camera.distance,120);
+ assert.equal(next.audio.enabled,false);assert.deepEqual(validateSetup(next),next);
+});
+
+test('sustained laser contact curls the tube around the strike and the reaction decays on release',async()=>{
+ await initPhysics();const sim=new RustSimulation(defaultSetup());
+ const span=sim.restCenters.at(-1)-sim.restCenters[0];
+ for(let i=0;i<240;i++) {
+  sim.update(1/60);
+  sim.laserStrike(new Vector3().copy(sim.rig[3].body.getPosition()).add(new Vector3(0,0,6.5)),new Vector3(0,0,1),1/60,4);
+ }
+ const first=new Vector3().copy(sim.rig[0].body.getPosition()),last=new Vector3().copy(sim.rig.at(-1).body.getPosition());
+ assert.ok(first.distanceTo(last)<span*.6,'both ends curl inward around the source');
+ assert.ok(sim.rig.some(r=>r.body.getPosition().y>sim.radius*1.8),'the reaction lifts sections clear of the floor');
+ assert.equal(sim.reaction.energy,1);assert.ok(Math.abs(sim.reaction.index-3)<.05);
+ for(let i=0;i<180;i++)sim.update(1/60);
+ assert.ok(sim.reaction.energy<.01);sim.dispose();
 });

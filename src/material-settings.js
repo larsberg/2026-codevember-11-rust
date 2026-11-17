@@ -9,15 +9,15 @@ export const materialFields = [
 ];
 export const materialFieldsFor = group => group === 'panels'
   ? materialFields.map(field => field[0] === 'opacity' ? [field[0], 'Metal opacity', ...field.slice(2)] : field) : materialFields;
-export const materialGroups = [['panels', 'Clean metal'], ['struts', 'Rust'], ['pistons', 'Laser housing'], ['joints', 'Gun grip']];
+export const materialGroups = [['panels', 'Clean metal'], ['struts', 'Rust'], ['pistons', 'Powder-coated lamp'], ['joints', 'Lamp joints and springs']];
 export function defaultMaterials() {
   const defaults = Object.fromEntries(materialGroups.map(([group]) => [group, {
     ...Object.fromEntries(materialFieldsFor(group).map(([key,,,,,value]) => [key, value])),
     color: '#ffffff', emissive: '#ffffff', wireframe: false, flatShading: false,
   }]));
   Object.assign(defaults.struts, { color: '#a34419', roughness: .95, metalness: .03 });
-  Object.assign(defaults.pistons, { color: '#bcb6a5', roughness: .31, metalness: .86 });
-  Object.assign(defaults.joints, { color: '#4c473e', roughness: .42, metalness: .7 });
+  Object.assign(defaults.pistons, { color: '#111416', roughness: .78, metalness: .06 });
+  Object.assign(defaults.joints, { color: '#181b1d', roughness: .72, metalness: .12 });
   Object.assign(defaults.panels, { color: '#c2cad0', roughness: .24, metalness: .96, opacity: 1,
     envMapIntensity: 1, depthWrite: true });
   return defaults;

@@ -1,4 +1,4 @@
-import { DataTexture, LinearFilter, RGBAFormat, Vector3 } from 'three';
+import { CapsuleGeometry, DataTexture, LinearFilter, RGBAFormat, Vector3 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 export const TILE = 256, MASK_WIDTH = TILE * 3, MASK_HEIGHT = TILE * 2;
@@ -15,6 +15,15 @@ export function createRustGeometry(size, chamfer) {
   uv.needsUpdate = true;
   // One shader, six non-overlapping atlas islands (including curved edges).
   geometry.clearGroups(); return geometry;
+}
+
+export function createRustCapsuleGeometry(length,radius) {
+  const source=new CapsuleGeometry(radius,Math.max(.1,length-2*radius),12,48,24);
+  source.rotateZ(-Math.PI/2);
+  const geometry=source.toNonIndexed();source.dispose();
+  const uv=geometry.attributes.uv;
+  for(let i=0;i<uv.count;i++)uv.setXY(i,.01+uv.getX(i)*.98,.01+uv.getY(i)*.98);
+  uv.needsUpdate=true;return geometry;
 }
 
 export class RustMask {

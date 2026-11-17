@@ -1,19 +1,20 @@
 {
   "rust": {
-    "size": 5,
-    "chamfer": 0.24,
-    "initial": 0.82,
-    "growth": 0.036000000000000004,
-    "radius": 0.28,
-    "power": 4
+    "size": 42.7,
+    "chamfer": 6.5,
+    "initial": 0.51,
+    "growth": 0.007,
+    "radius": 0.16,
+    "power": 7.2
   },
   "motion": {
     "playing": true
   },
   "physics": {
+    "originAttraction": 0.8,
     "damping": 0.35,
     "mass": 1,
-    "gravity": 9.8,
+    "gravity": 509.6,
     "friction": 1.1
   },
   "shape": {
@@ -25,7 +26,7 @@
     "paper": true
   },
   "studio": {
-    "background": "#080b10",
+    "background": "#000000",
     "exposure": 0.9,
     "shadowOpacity": 0.24
   },
@@ -44,7 +45,7 @@
   },
   "audio": {
     "enabled": true,
-    "volume": 0,
+    "volume": 0.34,
     "tempo": 120,
     "voices": [
       {
@@ -249,29 +250,29 @@
     "fps": false
   },
   "camera": {
-    "yaw": -20.9590592334,
-    "elevation": 6.5387630662,
-    "distance": 15,
+    "yaw": -25.5485169022,
+    "elevation": 31.344370215,
+    "distance": 80.5554354262,
     "offsetX": 0,
     "offsetY": 0,
     "offsetZ": 0
   },
-  "version": 1,
+  "version": 3,
   "sketch": "11-rust",
   "lighting": {
     "spotlight": {
       "enabled": true,
       "color": "#ffffff",
-      "intensity": 850,
-      "offsetX": -3,
-      "height": 8,
-      "offsetZ": 5,
+      "intensity": 180000,
+      "offsetX": -30,
+      "height": 80,
+      "offsetZ": 50,
       "angle": 32,
       "penumbra": 0.65,
       "castShadow": true,
-      "softness": 3,
-      "shadowBias": -0.0001,
-      "normalBias": 0.025
+      "softness": 1.2,
+      "shadowBias": -0.00001,
+      "normalBias": 0.002
     },
     "directional": {
       "enabled": false,
@@ -282,8 +283,8 @@
       "offsetZ": 5,
       "castShadow": true,
       "softness": 6,
-      "shadowBias": 0,
-      "normalBias": 0.025
+      "shadowBias": -0.00001,
+      "normalBias": 0.002
     },
     "fill": {
       "enabled": true,
@@ -294,8 +295,8 @@
       "offsetZ": -10,
       "castShadow": false,
       "softness": 6,
-      "shadowBias": 0,
-      "normalBias": 0.025
+      "shadowBias": -0.00001,
+      "normalBias": 0.002
     },
     "hemisphere": {
       "enabled": true,
@@ -351,23 +352,23 @@
       "flatShading": false
     },
     "pistons": {
-      "metalness": 0.86,
-      "roughness": 0.31,
+      "metalness": 0.06,
+      "roughness": 0.78,
       "emissiveIntensity": 0,
       "envMapIntensity": 1,
       "opacity": 1,
-      "color": "#bcb6a5",
+      "color": "#111416",
       "emissive": "#ffffff",
       "wireframe": false,
       "flatShading": false
     },
     "joints": {
-      "metalness": 0.7,
-      "roughness": 0.42,
+      "metalness": 0.12,
+      "roughness": 0.72,
       "emissiveIntensity": 0,
       "envMapIntensity": 1,
       "opacity": 1,
-      "color": "#4c473e",
+      "color": "#181b1d",
       "emissive": "#ffffff",
       "wireframe": false,
       "flatShading": false

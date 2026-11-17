@@ -29,7 +29,7 @@ export function createControls({settings,change,save,reload,resetView,exportDraw
       <label class="fps-toggle"><input id="visibility-fps" data-group="visibility" data-key="fps" type="checkbox">Show frame-rate meter</label>
       <div class="control-tabs" role="tablist" aria-label="Control sections">${tabs.map((name,i)=>`<button id="tab-${name.toLowerCase()}" role="tab" aria-controls="panel-${name.toLowerCase()}" aria-selected="${i===0}" tabindex="${i===0?0:-1}">${name}</button>`).join('')}</div>
       <div class="drawer-content"><p class="setup-status" role="status" aria-live="polite"></p><fieldset class="panel-body">
-        <section id="panel-mesh" role="tabpanel" aria-labelledby="tab-mesh"><p class="control-heading">11 / Rust</p>${group('rust',['size','chamfer','initial'])}<button data-action="export">Export drawing PNG</button></section>
+        <section id="panel-mesh" role="tabpanel" aria-labelledby="tab-mesh"><p class="control-heading">11 / Rust</p>${group('rust',['size','initial'])}<button data-action="export">Export drawing PNG</button></section>
         <section id="panel-drafting" role="tabpanel" aria-labelledby="tab-drafting" hidden><p class="control-heading">Construction drawing</p>${field('shape','construction')}${group('drafting',['ink','guides','paper'])}</section>
         <section id="panel-motion" role="tabpanel" aria-labelledby="tab-motion" hidden>
           <p class="control-heading">Oxidation / laser removal</p>
@@ -37,7 +37,7 @@ export function createControls({settings,change,save,reload,resetView,exportDraw
           <p class="camera-hint">The wide laser fan scans automatically. Left-drag to orbit, right-drag to pan, and scroll to zoom. Rust returns over time.</p>
           <button data-action="regenerate">Restart surface</button>
         </section>
-        <section id="panel-physics" role="tabpanel" aria-labelledby="tab-physics" hidden>${group('physics',['gravity','damping','mass','friction'])}<p class="camera-hint">The chamfered cube uses a Box3D convex hull and rests on the paper plane.</p></section>
+        <section id="panel-physics" role="tabpanel" aria-labelledby="tab-physics" hidden>${group('physics',['gravity','damping','mass','friction'])}<p class="camera-hint">The tube uses seven skinned sections with hollow box-collider walls and rounded profile corners. Gravity, floor contacts, horizontal origin attraction and laser impulses drive its motion.</p></section>
         <section id="panel-palettes" role="tabpanel" aria-labelledby="tab-palettes" hidden>${paletteWorkshopMarkup()}</section>
         <section id="panel-audio" role="tabpanel" aria-labelledby="tab-audio" hidden><p class="control-heading">Strudel / Laser</p><div class="audio-toolbar"><button type="button" class="audio-start">Enable sounds</button><button type="button" class="audio-stop">Mute sounds</button></div><p class="audio-status" role="status">Sounds muted</p>${group('audio',['volume','tempo'])}${synthControlsMarkup()}</section>
         <section id="panel-materials" role="tabpanel" aria-labelledby="tab-materials" hidden>${materialControlsMarkup()}</section>
