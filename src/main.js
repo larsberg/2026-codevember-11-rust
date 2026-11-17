@@ -8,7 +8,8 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { applyCameraView, captureCameraView, configureOrbitInputs, createCameraFollow } from './camera.js';
+import { applyCameraView, captureCameraView, configureOrbitInputs, createCameraFollow, stopCameraMotion } from './camera.js';
+import { bindColliderDrag } from './collider-drag.js';
 import { initPhysics, RustSimulation } from './rust-simulation.js';
 import { createRustView } from './rust-view.js';
 import { createControls } from './controls.js';
@@ -77,11 +78,11 @@ const palette = () => libraryPalettes(settings.paletteLibrary).find(p => p.id ==
 const soundDirector=createRustSoundDirector();
 const audio = createAudio({loadEffects:loadRustSounds,synthLevel:.25,synthMaxVoices:6,modulationHz:25,
   onError: message => console.warn(message), onStatus: state => controls?.audioStatus(state) });
-let simulation, surface, controls, materialControls, lightingControls, rigKey, revision = 0, simulationMilliseconds = 0;
+let simulation, surface, controls, materialControls, lightingControls, drag, rigKey, revision = 0, simulationMilliseconds = 0;
 const keyForRig = () => JSON.stringify(['size', 'chamfer', 'initial'].map(key => settings.rust[key]));
 function rebuild() {
   const next = new RustSimulation(settings);
-  releaseLaser(); surface?.dispose(); simulation?.dispose();
+  drag?.end(); releaseLaser(); surface?.dispose(); simulation?.dispose();
   simulation = next; surface = createRustView(scene, simulation);
   rigKey = keyForRig(); revision++;
   floor.position.y = simulation.floor;
@@ -109,7 +110,7 @@ function render() {
 }
 function togglePlaying() {
   settings.motion.playing = !settings.motion.playing;
-  if (!settings.motion.playing) releaseLaser();
+  if (!settings.motion.playing) {drag?.end();releaseLaser();}
   simulation.configure(settings); controls.set(settings);
 }
 function setSoundEnabled(enabled) {
@@ -167,7 +168,10 @@ function releaseLaser() { surface?.setTarget(null, false); }
 function targetLaser() {
   surface.setTarget(surface.automaticTarget(simulation.time), settings.motion.playing && !document.hidden);
 }
-// Pointer gestures belong entirely to OrbitControls. A gesture may unlock audio.
+drag=bindColliderDrag({element:canvas,camera,controls:orbit,getRig:()=>surface.rig,
+  canInteract:()=>settings.motion.playing,
+  onDragChange:active=>{if(active){stopCameraMotion(camera,orbit);if(settings.audio.enabled)void audio.unlock();}}});
+// Tube hits grab the physical skin; background gestures operate OrbitControls.
 canvas.addEventListener('pointerdown', () => {
   if(settings.audio.enabled) void audio.unlock().catch(error=>controls.status(error.message,true));
 });
@@ -180,6 +184,7 @@ window.addEventListener('resize', resize); resize();
 orbit.addEventListener('end', () => { settings.camera = captureCameraView(camera, orbit, follow.position); controls.set(settings); });
 let previous = performance.now(), wasRunning = false;
 renderer.setAnimationLoop(now => {
+  drag.update();
   const running = settings.motion.playing && !document.hidden, dt = wasRunning ? Math.min((now - previous) / 1000, 1 / 15) : 0;
   if (running) {
     const start = performance.now(); simulation.update(dt); simulationMilliseconds = performance.now() - start;
@@ -192,15 +197,15 @@ renderer.setAnimationLoop(now => {
   audio.update(dt,running,simulation.position,simulation.floor,sound.events);
   wasRunning = running; previous = now;
   simulation.getCenter(focus);
-  if (running) follow.update(camera, orbit, focus, true, false, dt, .45);
+  if (running) follow.update(camera, orbit, focus, true, drag.active, dt, .45);
   orbit.update(); render(); controls.frame(simulation.stats, audio.modulation);
 });
 document.addEventListener('visibilitychange', () => {
-  previous = performance.now(); wasRunning = false; releaseLaser();
+  previous = performance.now(); wasRunning = false; drag.end();releaseLaser();
   audio.update(0, false);
 });
 window.addEventListener('pagehide', () => {
-  renderer.setAnimationLoop(null); audio.dispose(); lightingControls.dispose(); effects.dispose(); surface.dispose(); simulation.dispose(); orbit.dispose();
+  renderer.setAnimationLoop(null); audio.dispose();drag.dispose(); lightingControls.dispose(); effects.dispose(); surface.dispose(); simulation.dispose(); orbit.dispose();
   floor.geometry.dispose(); floor.material.dispose();
   for(const source of [light,fill,spotlight])source.shadow.dispose();
   environment.dispose(); room.dispose(); pmrem.dispose(); renderer.dispose();

@@ -33,7 +33,7 @@ export function createControls({settings,change,save,reload,resetView,exportDraw
         <section id="panel-motion" role="tabpanel" aria-labelledby="tab-motion" hidden>
           <p class="control-heading">Oxidation / laser removal</p>
           ${group('rust',['growth','radius','power'])}
-          <p class="camera-hint">The wide laser fan scans automatically. Left-drag to orbit, right-drag to pan, and scroll to zoom. Rust returns over time.</p>
+          <p class="camera-hint">The wide laser fan scans automatically. Drag the tube to grab it; drag the background to orbit. Right-drag pans and scroll zooms. The tube works back toward the origin when released.</p>
           <button data-action="regenerate">Restart surface</button>
         </section>
         <section id="panel-physics" role="tabpanel" aria-labelledby="tab-physics" hidden>${group('physics',['gravity','damping','mass','friction'])}<p class="camera-hint">The tube uses seven skinned sections with hollow box-collider walls and rounded profile corners. Gravity, floor contacts, horizontal origin attraction and laser impulses drive its motion.</p></section>
@@ -42,7 +42,7 @@ export function createControls({settings,change,save,reload,resetView,exportDraw
         <section id="panel-materials" role="tabpanel" aria-labelledby="tab-materials" hidden>${materialControlsMarkup()}</section>
         <section id="panel-lighting" role="tabpanel" aria-labelledby="tab-lighting" hidden><p class="control-heading">Studio</p>${group('studio')}${lightingControlsMarkup()}<details class="material-group"><summary>Bloom</summary>${group('bloom')}</details></section>
         <section id="panel-camera" role="tabpanel" aria-labelledby="tab-camera" hidden><div class="camera-controls">${group('camera')}</div><button class="reset-camera">Reset view</button><details class="material-group"><summary>Tilt blur</summary>${group('focus')}</details></section>
-        <section id="panel-info" role="tabpanel" aria-labelledby="tab-info" hidden><p class="camera-hint">The gun runs automatically. Left-drag to orbit. Right-drag to pan. Scroll to zoom. One finger orbits; two fingers pan and zoom.</p><p class="camera-hint">H controls · M sound · Space pause</p></section>
+        <section id="panel-info" role="tabpanel" aria-labelledby="tab-info" hidden><p class="camera-hint">The gun runs automatically. Drag the tube to grab and lift it; release to drop it. Drag the background to orbit. Right-drag to pan. Scroll to zoom. Two fingers pan and zoom.</p><p class="camera-hint">H controls · M sound · Space pause</p></section>
       </fieldset></div>
     </aside>`);
   const query=s=>shell.querySelector(s),drawer=query('.control-panel'),toggle=query('.drawer-toggle');

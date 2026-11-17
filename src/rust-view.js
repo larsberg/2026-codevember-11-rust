@@ -132,6 +132,15 @@ export function createRustView(scene, simulation) {
     if(intersection.barycoord) localNormal.copy(a.multiplyScalar(intersection.barycoord.x).addScaledVector(b,intersection.barycoord.y).addScaledVector(c,intersection.barycoord.z)).normalize();
     return { ...intersection,localPoint,localNormal,worldNormal:intersection.face.normal.clone().applyQuaternion(cube.quaternion).normalize() };
   }
+  const rig={
+    pickCollider(raycaster) {
+      updateSkin();caster.ray.copy(raycaster.ray);const hit=intersectionHit();if(!hit)return null;
+      const [a,b,t]=simulation.influences(hit.localPoint.x);
+      return {link:t<.5?a:b,point:hit.point};
+    },
+    beginDrag:(link,point)=>simulation.beginDrag(link,point),moveDrag:point=>simulation.moveDrag(point),
+    endDrag:()=>simulation.endDrag(),get dragging(){return simulation.dragging;},
+  };
   function automaticTarget(seconds) {
     // Sample the real surface trajectory on either side of the current time.
     // Its tangent controls the fan rotation even at the first frame or a turn.
@@ -258,7 +267,7 @@ export function createRustView(scene, simulation) {
       particleGeometry.attributes.position.needsUpdate=true;streakGeometry.attributes.position.needsUpdate=true;
     }
   }
-  return { group,cube,mask,materials,stands,configure,update,pick,automaticTarget,setTarget,
+  return { group,cube,mask,materials,stands,rig,configure,update,pick,automaticTarget,setTarget,
     get soundState(){return {removed:mask.cleaned,sparks:particleCursor,dust:dustCursor,contactPoint:lastContactPoint,lampPoint:stands.stations[0].pivot};},
     get working(){return active&&fanImpacts.length>0;}, get diagnostics(){return { coverage:mask.coverage, cleaned:mask.cleaned, lastUv, working:active, lasers:stands.stations.length, fanRays:fanGeometry.drawRange.count/2,dust:Math.min(dustCursor,dustCount), maskSize:[mask.texture.image.width,mask.texture.image.height] };},
     dispose(){if(disposed)return;disposed=true;scene.remove(group);stands.dispose();mask.dispose();pickGeometry.dispose();pickMaterial.dispose();particleGeometry.dispose();particleMaterial.dispose();fanGeometry.dispose();fanMaterial.dispose();sheetGeometry.dispose();sheetMaterial.dispose();streakGeometry.dispose();dustGeometry.dispose();dustMaterial.dispose();

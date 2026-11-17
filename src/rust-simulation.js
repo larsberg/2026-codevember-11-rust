@@ -71,7 +71,18 @@ export class RustSimulation {
     return point;
   }
   drive() {
-    const center=new Vector3();for(const entry of this.rig)center.add(new Vector3().copy(entry.body.getPosition()));center.divideScalar(this.rig.length);
+    const center=new Vector3(),velocity=new Vector3();
+    for(const entry of this.rig){center.add(new Vector3().copy(entry.body.getPosition()));velocity.add(new Vector3().copy(entry.body.getLinearVelocity()));}
+    center.divideScalar(this.rig.length);velocity.divideScalar(this.rig.length);
+    const distance=Math.hypot(center.x,center.z),attraction=this.settings.physics.originAttraction??.8;
+    const rate=attraction*Math.max(1,this.settings.physics.gravity/9.8);
+    // A bounded friction allowance keeps a dropped tube from sticking far from
+    // home; shared velocity damping avoids circling and spring overshoot.
+    const friction=this.settings.physics.friction*this.settings.physics.gravity;
+    const near=Math.min(1,distance/Math.max(1,this.scale*.6));
+    const pull=Math.min(Math.max(9.8,this.settings.physics.gravity)*Math.max(1.4,this.settings.physics.friction*1.25),distance*rate+friction*1.15*near)*Math.min(1,attraction/.8);
+    const damping=2*Math.sqrt(rate),returnForce=new Vector3();
+    if(!this.drag&&distance>1e-6&&attraction>0)returnForce.set(-center.x/distance*pull-velocity.x*damping,0,-center.z/distance*pull-velocity.z*damping);
     const reaction=this.reaction;
     if(this.time-reaction.lastStrike>.06)reaction.energy*=Math.exp(-PHYSICS_STEP*2.5);
     reaction.index+=(reaction.targetIndex-reaction.index)*(1-Math.exp(-PHYSICS_STEP*12));
@@ -80,12 +91,12 @@ export class RustSimulation {
     const lift=reaction.normal.clone().multiplyScalar(.55).add(new Vector3(0,1,0)).normalize();
     const curlAxis=new Vector3().crossVectors(tangent,lift).normalize();
     for(const [i,entry] of this.rig.entries()) {
-      const mass=entry.body.getMass(),rate=(this.settings.physics.originAttraction??.8)*Math.max(1,this.settings.physics.gravity/9.8);
-      entry.body.applyForceToCenter({x:-center.x*rate*mass,y:0,z:-center.z*rate*mass},true);
+      const mass=entry.body.getMass();
+      entry.body.applyForceToCenter(returnForce.clone().multiplyScalar(mass),true);
       // Traveling bending torques act through the joint limits and contacts.
       // As in the source rig, all animated poses come from Box3D.
       const lever=(this.restCenters[1]-this.restCenters[0]),strength=mass*this.settings.physics.gravity*lever*1.1;
-      const idle=1-reaction.energy*.7;
+      const idle=(1-reaction.energy*.7)*(this.drag ? .15 : 1);
       const torque=new Vector3(0,strength*.8*Math.sin(this.time*1.25-i*.85)*idle,strength*Math.sin(this.time*1.55-i*.9)*idle);
       if(reaction.energy>.001) {
         const distance=i-reaction.index,desired=Math.sign(distance)*Math.min(Math.PI*.68,Math.abs(distance)*.65)*reaction.energy;
@@ -107,6 +118,23 @@ export class RustSimulation {
       entry.body.setLinearDamping(settings.physics.damping);entry.body.setAngularDamping(1.5);
       for(const shape of entry.shapes)shape.setDensity(settings.physics.mass,false);entry.body.applyMassFromShapes();
     }
+    if(this.drag)this.drag.joint.joint.setMaxSpringForce(this.grabForce());
+  }
+  grabForce() {return this.rig.reduce((sum,entry)=>sum+entry.body.getMass(),0)*Math.max(9.8,this.settings.physics.gravity)*20;}
+  get dragging() {return !!this.drag;}
+  beginDrag(index,point) {
+    this.endDrag();const entry=this.rig[index];if(!entry)return false;
+    const cursor=this.physics.addBody({body:{type:'static',position:point}});
+    const joint=this.physics.addMotorJoint(cursor,entry,{localFrameB:{position:entry.body.getLocalPoint(point)},
+      linearHertz:4,linearDampingRatio:.9,maxSpringForce:this.grabForce(),
+      maxSpringTorque:0,maxVelocityForce:0,maxVelocityTorque:0,collideConnected:false});
+    this.drag={cursor,joint};for(const entry of this.rig)entry.body.setAwake(true);return true;
+  }
+  moveDrag(point) {this.drag?.cursor.body.setTransform(point,{x:0,y:0,z:0,w:1});}
+  endDrag() {
+    if(!this.drag)return;
+    this.physics.removeJoint(this.drag.joint);this.physics.removeBody(this.drag.cursor);this.drag=undefined;
+    for(const entry of this.rig)entry.body.setAwake(true);
   }
   laserStrike(point,normal,dt,power) {
     if(!(dt>0))return;
@@ -137,6 +165,6 @@ export class RustSimulation {
   }
   update(dt) {this.time+=dt;this.physics.step(dt);this.sync();}
   getCenter(target) {return target.copy(this.center);}
-  get stats() {return {bodies:this.physics.entries.length,colliders:this.rig.reduce((sum,entry)=>sum+entry.shapes.length,0),bones:this.bones.length,joints:this.physics.joints.length,physicsEngine:'Box3D',time:this.time,recoilImpulses:this.recoilImpulses};}
-  dispose() {this.physics.dispose();this.skeleton.dispose();this.geometry.dispose();}
+  get stats() {return {bodies:this.physics.entries.length,colliders:this.rig.reduce((sum,entry)=>sum+entry.shapes.length,0),bones:this.bones.length,joints:this.physics.joints.length,dragging:this.dragging,physicsEngine:'Box3D',time:this.time,recoilImpulses:this.recoilImpulses};}
+  dispose() {this.endDrag();this.physics.dispose();this.skeleton.dispose();this.geometry.dispose();}
 }

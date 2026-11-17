@@ -10,8 +10,11 @@ perpendicular to the local surface travel direction and rotates through turns.
 Run `npm run dev` in the visible VS Code terminal. Vite uses strict port **1234**.
 Reuse the shared VS Code browser at `http://127.0.0.1:1234/?ui=1`.
 **H** opens the inherited controls, **M** toggles sound, **Space** pauses.
-Left-drag or one finger orbits; right-drag pans; wheel zooms. Two fingers pan/zoom.
-All aiming is automatic; pointer input only operates the camera and unlocks audio.
+Drag the tube to grab and lift it; release to drop it. Drag the background to
+orbit; right-drag pans; wheel zooms. Two fingers pan/zoom. All laser aiming stays
+automatic. Grabbing freezes camera follow and uses a native Box3D motor spring
+at the clicked point on the deformed skin. Pause, blur, pointer cancellation,
+hidden tabs and rebuild release the joint and restore the camera.
 The Motion tab contains rust growth, laser radius (fan scale), and power. Mesh
 contains tube length and initial oxidation. The hollow profile stays fixed at
 13 × 10 units, 1.2-unit wall thickness and 2.2-unit outer corner radius. Restart surface starts a fresh
@@ -56,7 +59,9 @@ section. Sustained contact builds a local curling response: neighboring sections
 rotate inward toward the hit and lift, with larger joint travel and self-collision.
 The response follows the moving impact and decays after release; its movement
 comes entirely from Box3D forces/torques, not pose overrides. Gravity and floor contact govern its fall/landing; a mass-scaled,
-horizontal origin field acts coherently on the whole rig. No vertex-spring solver
+horizontal origin field acts coherently on the whole rig. It pauses while held;
+after release, a bounded friction allowance and shared velocity damping help the
+undulating tube return without sticking far away or orbiting the origin. No vertex-spring solver
 or direct animation of body transforms is used. Each section has four flat-wall box colliders and
 24 rotated corner boxes, leaving the interior empty. Box offset/rotation uses
 the [native createBox implementation](https://github.com/monteslu/box3d-wasm/blob/main/csrc/glue.cpp#L1048). At the enlarged scale, the preset also
@@ -103,7 +108,7 @@ fuller studio implementations in **`../02-shatter-drafting`** and
 
 Deliberate subject changes: the folding assembly, hinge commands, composition
 and recorded clacks are replaced by the skinned tube, oxidation controls and automatic
-laser sound. The jointed rig bends through applied physics torques and has no grab spring. The palette workshop remains available for saved palette libraries; the material editor owns the metal/rust endpoints. Drafting controls, construction edges, projection guides and paper grain are removed from the scene, including when reading legacy saves. Ground audio
+laser sound. The jointed rig bends through applied physics torques and uses a temporary native grab spring while held. The palette workshop remains available for saved palette libraries; the material editor owns the metal/rust endpoints. Drafting controls, construction edges, projection guides and paper grain are removed from the scene, including when reading legacy saves. Ground audio
 scopes and presentation/recording editors from Shatter are not part of Fold's
 shell or this subject. Release tooling and the Pages workflow follow `../10-caustic`, with Rust-specific metadata and a real browser-captured thumbnail.
 
