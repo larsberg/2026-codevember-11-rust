@@ -16,9 +16,9 @@ export const fields = {
     damping: ['Damping', .35, .1, 20, .1], mass: ['Body mass scale', 1, .1, 5, .1],
     gravity: ['Gravity', 98, 0, 1000, .1], friction: ['Ground friction', 1.1, 0, 10, .01],
   },
-  shape: { construction: ['Construction lines', true] },
+  shape: { construction: ['Construction lines', false] },
   drafting: {
-    ink: ['Ink edges', true], guides: ['Projection guides', true], paper: ['Paper grain', true],
+    ink: ['Ink edges', false], guides: ['Projection guides', false], paper: ['Paper grain', false],
   },
   studio: { background: ['Background', '#000000'], exposure: ['Exposure', .9, .1, 3, .01], shadowOpacity: ['Ground shadow opacity', .24, 0, 1, .01] },
   bloom: { enabled: ['Enable bloom', true], strength: ['Bloom strength', .85, 0, 4, .05], radius: ['Bloom radius', .45, 0, 1, .01], threshold: ['Bloom threshold', 1.4, 0, 3, .01] },
@@ -36,7 +36,7 @@ export const fields = {
 export function defaultSetup() {
   const result = Object.fromEntries(Object.entries(fields).map(([group, entries]) => [group,
     Object.fromEntries(Object.entries(entries).map(([key, [, initial]]) => [key, initial]))]));
-  result.version = 3; result.sketch = '11-rust';
+  result.version = 4; result.sketch = '11-rust';
   result.audio.voices = defaultVoices();
   result.lighting = defaultLighting(); result.materials = defaultMaterials();
   Object.assign(result.lighting.spotlight, { enabled:true, castShadow:true, intensity:180000, angle:32, penumbra:.65, offsetX:-30, height:80, offsetZ:50 });
@@ -55,6 +55,16 @@ export function validateSetup(value) {
     if(value.physics.gravity===9.8)value.physics.gravity=98;
     if(value.lighting?.spotlight){const spot=value.lighting.spotlight;spot.intensity*=100;spot.offsetX*=10;spot.height*=10;spot.offsetZ*=10;}
   }
+  if((value.version??1)<4 && value.sketch==='11-rust') {
+    value=structuredClone(value);
+    const old=[{note:89,sound:'sine'},{note:65,sound:'sawtooth'}],fresh=defaultVoices();
+    value.audio?.voices?.forEach((voice,i)=>{
+      if(voice.note===old[i]?.note&&voice.sound===old[i]?.sound) {
+        voice.note=fresh[i].note;voice.sound=fresh[i].sound;
+        for(const [key,previous] of Object.entries({lowpass:4800,fm:.1,attack:.006,release:.025,reverb:.12,delay:.06}))if(voice[key]===previous)voice[key]=fresh[i][key];
+      }
+    });
+  }
   const result = defaultSetup();
   // Missing Rust fields migrate to defaults; shared studio edits remain intact.
   for (const [group, entries] of Object.entries(fields)) for (const [key, [, initial, min, max]] of Object.entries(entries)) {
@@ -64,6 +74,9 @@ export function validateSetup(value) {
     if (!valid) throw Error(`Invalid ${group}.${key}.`);
     result[group][key] = x;
   }
+  // Retain legacy keys for saved setups, with the retired drafting mode disabled.
+  result.shape.construction=false;
+  result.drafting={ink:false,guides:false,paper:false};
   result.audio.voices = validateVoices(value.audio?.voices);
   result.lighting = validateLighting(Object.fromEntries(Object.entries(result.lighting).map(([key, defaults]) => [key, { ...defaults, ...value.lighting?.[key] }])));
   result.materials = validateMaterials(value.materials);

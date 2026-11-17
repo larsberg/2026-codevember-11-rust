@@ -3,7 +3,7 @@ export const audioFields = {
   enabled: ['Sound', true], volume: ['Volume', .3, 0, 1, .01], tempo: ['Delay tempo (BPM)', 120, 20, 200, 1],
 };
 export const waveforms = ['triangle', 'sine', 'sawtooth', 'square'];
-export const VOICE_NAMES = ['Laser carrier', 'Laser rasp'];
+export const VOICE_NAMES = ['Laser carrier', 'Tube and debris'];
 export const voiceFields = {
   level: ['Level', .6, 0, 1, .01], gate: ['Note length / step', .7, .1, 1, .01],
   attack: ['Attack (s)', .006, .001, 1, .001], decay: ['Decay (s)', .15, .01, 2, .01],
@@ -27,8 +27,9 @@ export const modulationTargets = {
 export function defaultVoices() {
   return [0, 1].map(index => ({
     ...Object.fromEntries(Object.entries(voiceFields).map(([key, [, initial]]) => [key, initial])),
-    enabled: true, sound: index ? 'sawtooth' : 'sine', note: index ? 65 : 89,
+    enabled: true, sound: index ? 'triangle' : 'sine', note: index ? 43 : 77,
     rhythm: 'x',
+    lowpass:index?1200:2600,fm:index?1:.18,attack:index?.04:.02,release:index?.14:.06,reverb:.02,delay:0,
     level: index ? .18 : .38, pan: index ? .65 : .35, gate: .88,
     modulations: Object.fromEntries(Object.entries(modulationTargets).map(([key, [,, min, max]], i) => [key, {
       enabled: false,

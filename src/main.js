@@ -2,7 +2,6 @@ import { attachPlayerBridge } from './player-bridge.js';
 // 01-fold studio shell; Rust replaces the subject and its event source.
 import './style.css';
 import './mesh-style.css';
-import './drafting.css';
 import {
   ACESFilmicToneMapping, Color, DirectionalLight, HemisphereLight, PCFShadowMap,
   MOUSE, TOUCH, PerspectiveCamera, PMREMGenerator, Scene, SpotLight, SRGBColorSpace, Vector3, WebGLRenderer,
@@ -23,7 +22,8 @@ import { bindMaterialControls } from './material-controls.js';
 import { materialGroups } from './material-settings.js';
 import { createSceneEffects } from './scene-effects.js';
 import { createAudio } from './score.js';
-import { createDrawingPlate } from './drawing-plate.js';
+import { loadRustSounds } from './rust-sounds.js';
+import { createRustSoundDirector } from './rust-sound-director.js';
 
 let settings = defaultSetup(), setupLoadError;
 try { settings = await requestSetup(); } catch (error) { setupLoadError = error.message; console.warn(error.message); }
@@ -34,7 +34,8 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.outputColorSpa
 renderer.toneMapping = ACESFilmicToneMapping; renderer.toneMappingExposure = .9;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = PCFShadowMap;
 const scene = new Scene(); scene.background = new Color(settings.studio.background);
-const camera = new PerspectiveCamera(42, innerWidth / innerHeight, .1, 300);
+// Keep the tube inside the clip range throughout the supported 600-unit orbit.
+const camera = new PerspectiveCamera(42, innerWidth / innerHeight, .1, 900);
 const orbit = new OrbitControls(camera, canvas);
 configureOrbitInputs(orbit);
 orbit.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN };
@@ -73,8 +74,8 @@ const effects = createSceneEffects(renderer, scene, camera, { clampBeauty: false
 const floor = createPaperFloor(settings.studio.background);floor.material.dispose();
 floor.material=createSpotlightFloorMaterial();scene.add(floor); floor.layers.enable(1);
 const palette = () => libraryPalettes(settings.paletteLibrary).find(p => p.id === settings.paletteId);
-const plate = createDrawingPlate();
-const audio = createAudio({ synthLevel: .35, synthMaxVoices: 8, modulationHz: 30,
+const soundDirector=createRustSoundDirector();
+const audio = createAudio({loadEffects:loadRustSounds,synthLevel:.25,synthMaxVoices:6,modulationHz:25,
   onError: message => console.warn(message), onStatus: state => controls?.audioStatus(state) });
 let simulation, surface, controls, materialControls, lightingControls, rigKey, revision = 0, simulationMilliseconds = 0;
 const keyForRig = () => JSON.stringify(['size', 'chamfer', 'initial'].map(key => settings.rust[key]));
@@ -86,7 +87,7 @@ function rebuild() {
   floor.position.y = simulation.floor;
   simulation.getCenter(focus); follow.reset(focus);
   applyCameraView(settings.camera, camera, orbit, follow.position);
-  surface.configure(settings, palette()); surface.update(camera);
+  surface.configure(settings, palette()); surface.update(camera);soundDirector.reset(simulation,surface);
 }
 function configure(restoreCamera = false) {
   if (rigKey !== keyForRig()) rebuild(); else simulation.configure(settings);
@@ -94,7 +95,7 @@ function configure(restoreCamera = false) {
   materialControls?.set(settings.materials);
   configureEnvironment();
   surface.configure(settings, palette());
-  audio.update(0, settings.motion.playing && !document.hidden && surface.working, simulation.position.subarray(0, 48), simulation.floor); audio.configure(settings.audio);
+  audio.update(0, settings.motion.playing && !document.hidden, simulation.position.subarray(0, 48), simulation.floor); audio.configure(settings.audio);
   lightingControls?.set(settings.lighting);
   renderer.toneMappingExposure = settings.studio.exposure;
   for(const source of [light,fill,spotlight])source.shadow.intensity=Math.min(1,settings.studio.shadowOpacity/.24);
@@ -105,7 +106,6 @@ function configure(restoreCamera = false) {
 function render() {
   surface.update(camera,0,settings.motion.playing && !document.hidden);
   lightingControls?.updatePosition(follow.position); updateSpotlightFloor(floor.material,spotlight); followShadow(follow.position); effects.render(follow.position);
-  plate.render(renderer, settings);
 }
 function togglePlaying() {
   settings.motion.playing = !settings.motion.playing;
@@ -143,7 +143,7 @@ const controlActions = { settings, change,
   exportDrawing() {
     render();
     canvas.toBlob(blob => {
-      if (!blob) { controls.status('Could not export the drawing.', true); return; }
+      if (!blob) { controls.status('Could not export the image.', true); return; }
       const url = URL.createObjectURL(blob), link = document.createElement('a');
       link.href = url; link.download = '11-rust.png'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, 'image/png');
@@ -178,7 +178,7 @@ function resize() {
 }
 window.addEventListener('resize', resize); resize();
 orbit.addEventListener('end', () => { settings.camera = captureCameraView(camera, orbit, follow.position); controls.set(settings); });
-let previous = performance.now(), wasRunning = false, laserClock=.1, laserSerial=0;
+let previous = performance.now(), wasRunning = false;
 renderer.setAnimationLoop(now => {
   const running = settings.motion.playing && !document.hidden, dt = wasRunning ? Math.min((now - previous) / 1000, 1 / 15) : 0;
   if (running) {
@@ -187,12 +187,9 @@ renderer.setAnimationLoop(now => {
   targetLaser();
   surface.update(camera,dt,running);
   const working = running && surface.working;
-  const events=[];
-  laserClock = working ? laserClock+dt : .1;
-  if(working && laserClock >= .075) {
-    laserClock=0; events.push({ from:-1e-6,to:0,duration:.16,serial:++laserSerial });
-  }
-  audio.update(dt,working,simulation.position,simulation.floor,events);
+  const sound=soundDirector.update(dt,{simulation,surface,camera,working,running,ready:audio.unlocked,settings:settings.audio});
+  audio.setScene(sound.scene);
+  audio.update(dt,running,simulation.position,simulation.floor,sound.events);
   wasRunning = running; previous = now;
   simulation.getCenter(focus);
   if (running) follow.update(camera, orbit, focus, true, false, dt, .45);
@@ -203,7 +200,7 @@ document.addEventListener('visibilitychange', () => {
   audio.update(0, false);
 });
 window.addEventListener('pagehide', () => {
-  renderer.setAnimationLoop(null); audio.dispose(); lightingControls.dispose(); effects.dispose(); plate.dispose(); surface.dispose(); simulation.dispose(); orbit.dispose();
+  renderer.setAnimationLoop(null); audio.dispose(); lightingControls.dispose(); effects.dispose(); surface.dispose(); simulation.dispose(); orbit.dispose();
   floor.geometry.dispose(); floor.material.dispose();
   for(const source of [light,fill,spotlight])source.shadow.dispose();
   environment.dispose(); room.dispose(); pmrem.dispose(); renderer.dispose();
@@ -212,7 +209,7 @@ window.addEventListener('pagehide', () => {
 window.__rustSketch = {
   getSetup: () => structuredClone(settings),
   getState: () => ({ ...simulation.stats, playing: settings.motion.playing, rust: surface.diagnostics,
-    audioEngine: 'Strudel', audioUnlocked: audio.unlocked, audio: audio.diagnostics, simulationMilliseconds, revision }),
+    audioEngine: 'Strudel', audioUnlocked: audio.unlocked, audio: audio.diagnostics, sceneAudio:soundDirector.diagnostics, simulationMilliseconds, revision }),
   renderer, scene, camera, orbit, effects, lights: { directional: light, hemisphere, spotlight, fill }, get simulation() { return simulation; }, get view() { return surface; },
   get audioAnalysis() { return audio.analysis; }, render, change, rebuild() { rebuild(); configure(true); },
   advance(seconds) { for (let i = 0; i < Math.round(seconds * 60); i++) { simulation.update(1 / 60); surface.update(camera); targetLaser(); surface.update(camera,1/60,true); } render(); },

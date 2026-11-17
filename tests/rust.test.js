@@ -6,6 +6,19 @@ import { defaultSetup, validateSetup } from '../src/settings.js';
 import { initPhysics, RustSimulation } from '../src/rust-simulation.js';
 import { createRustView } from '../src/rust-view.js';
 
+test('legacy drafting flags cannot restore construction overlays', async () => {
+  const old=defaultSetup();old.shape.construction=true;old.drafting={ink:true,guides:true,paper:true};
+  const setup=validateSetup(old);
+  assert.equal(setup.shape.construction,false);
+  assert.deepEqual(setup.drafting,{ink:false,guides:false,paper:false});
+  await initPhysics();const sim=new RustSimulation(setup),scene=new Scene(),view=createRustView(scene,sim);
+  view.configure(old);
+  assert.equal(view.cube.children.filter(child=>child.isLineSegments).length,0);
+  const guides=[];scene.traverse(child=>{if(child.material?.isLineDashedMaterial)guides.push(child);});
+  assert.equal(guides.length,0);
+  view.dispose();sim.dispose();
+});
+
 test('atlas isolates opposite faces and UV ray hits clean only the hit surface', () => {
   const geometry=createRustGeometry(5,.24), mask=new RustMask(geometry,1);
   const mesh=new Mesh(geometry,new MeshBasicMaterial());mesh.updateMatrixWorld();

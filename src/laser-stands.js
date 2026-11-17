@@ -41,7 +41,7 @@ export function createLaserStands(scene,length,scale,materials) {
   const emitter=part(optics,new CylinderGeometry(.095,.095,.025,24),emitterMaterial);emitter.position.y=-.782;
   const light=new PointLight('#ff9d37',0,2.5*scale,2);group.add(light);
   const station={pivot,head,optics,light,nozzle:new Vector3(),headRadius:0,
-    setFanRadius(radius){this.headRadius=radius;optics.scale.set(radius/scale,1,radius/scale);}};
+    setFanRadius(radius){this.headRadius=radius*.25;optics.scale.set(this.headRadius/scale,1,this.headRadius/scale);}};
   station.setFanRadius(.28*5*scale);
   return {group,stations:[station],basePosition,dispose(){scene.remove(group);for(const geometry of geometries)geometry.dispose();emitterMaterial.dispose();}};
 }

@@ -11,7 +11,11 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 1234 --strictPort",
     "test": "node --test",
-    "check": "npm test && npm run build"
+    "check": "npm test && npm run build",
+    "check:release": "node scripts/check-release.js",
+    "publish:source": "node scripts/publish-source.js",
+    "publish:pages": "node scripts/publish-pages.js",
+    "deploy": "npm run check && npm run check:release && npm run publish:source"
   },
   "dependencies": {
     "@strudel/web": "1.3.0",

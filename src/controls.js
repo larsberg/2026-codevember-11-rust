@@ -14,7 +14,7 @@ function field(group,key){const [label,initial,min,max,step]=fields[group][key],
   return `<label class="slider-label" for="${id}">${label}<output></output></label><input id="${id}" ${data} type="range" min="${min}" max="${max}" step="${step}">`;
 }
 export function createControls({settings,change,save,reload,resetView,exportDrawing,togglePlaying,toggleSound,setSoundEnabled,reset,regenerate,selectPalette,changeLibrary}) {
-  const shell=document.querySelector('.sketch'),tabs=['Mesh','Motion','Physics','Drafting','Palettes','Audio','Materials','Lighting','Camera','Info'];
+  const shell=document.querySelector('.sketch'),tabs=['Mesh','Motion','Physics','Palettes','Audio','Materials','Lighting','Camera','Info'];
   const group=(g,keys=Object.keys(fields[g]))=>keys.map(k=>field(g,k)).join('');
   const saveLabel=import.meta.env?.PROD?'Save on this device':'Save settings';
   shell.insertAdjacentHTML('beforeend',`
@@ -29,8 +29,7 @@ export function createControls({settings,change,save,reload,resetView,exportDraw
       <label class="fps-toggle"><input id="visibility-fps" data-group="visibility" data-key="fps" type="checkbox">Show frame-rate meter</label>
       <div class="control-tabs" role="tablist" aria-label="Control sections">${tabs.map((name,i)=>`<button id="tab-${name.toLowerCase()}" role="tab" aria-controls="panel-${name.toLowerCase()}" aria-selected="${i===0}" tabindex="${i===0?0:-1}">${name}</button>`).join('')}</div>
       <div class="drawer-content"><p class="setup-status" role="status" aria-live="polite"></p><fieldset class="panel-body">
-        <section id="panel-mesh" role="tabpanel" aria-labelledby="tab-mesh"><p class="control-heading">11 / Rust</p>${group('rust',['size','initial'])}<button data-action="export">Export drawing PNG</button></section>
-        <section id="panel-drafting" role="tabpanel" aria-labelledby="tab-drafting" hidden><p class="control-heading">Construction drawing</p>${field('shape','construction')}${group('drafting',['ink','guides','paper'])}</section>
+        <section id="panel-mesh" role="tabpanel" aria-labelledby="tab-mesh"><p class="control-heading">11 / Rust</p>${group('rust',['size','initial'])}<button data-action="export">Export PNG</button></section>
         <section id="panel-motion" role="tabpanel" aria-labelledby="tab-motion" hidden>
           <p class="control-heading">Oxidation / laser removal</p>
           ${group('rust',['growth','radius','power'])}

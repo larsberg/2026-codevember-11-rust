@@ -18,12 +18,12 @@
     "friction": 1.1
   },
   "shape": {
-    "construction": true
+    "construction": false
   },
   "drafting": {
-    "ink": true,
-    "guides": true,
-    "paper": true
+    "ink": false,
+    "guides": false,
+    "paper": false
   },
   "studio": {
     "background": "#000000",
@@ -45,31 +45,31 @@
   },
   "audio": {
     "enabled": true,
-    "volume": 0.34,
+    "volume": 0.79,
     "tempo": 120,
     "voices": [
       {
         "level": 0.38,
         "gate": 0.88,
-        "attack": 0.006,
+        "attack": 0.02,
         "decay": 0.15,
         "sustain": 0.8,
-        "release": 0.025,
-        "lowpass": 4800,
+        "release": 0.06,
+        "lowpass": 2600,
         "resonance": 0.7,
         "highpass": 20,
-        "fm": 0.1,
+        "fm": 0.18,
         "harmonicity": 2,
         "drive": 0.04,
         "pan": 0.35,
-        "reverb": 0.12,
+        "reverb": 0.02,
         "roomSize": 0.6,
-        "delay": 0.06,
+        "delay": 0,
         "delayTime": 0.75,
         "delayFeedback": 0.25,
         "enabled": true,
         "sound": "sine",
-        "note": 89,
+        "note": 77,
         "rhythm": "x",
         "modulations": {
           "lowpass": {
@@ -149,25 +149,25 @@
       {
         "level": 0.18,
         "gate": 0.88,
-        "attack": 0.006,
+        "attack": 0.04,
         "decay": 0.15,
         "sustain": 0.8,
-        "release": 0.025,
-        "lowpass": 4800,
+        "release": 0.14,
+        "lowpass": 1200,
         "resonance": 0.7,
         "highpass": 20,
-        "fm": 0.1,
+        "fm": 1,
         "harmonicity": 2,
         "drive": 0.04,
         "pan": 0.65,
-        "reverb": 0.12,
+        "reverb": 0.02,
         "roomSize": 0.6,
-        "delay": 0.06,
+        "delay": 0,
         "delayTime": 0.75,
         "delayFeedback": 0.25,
         "enabled": true,
-        "sound": "sawtooth",
-        "note": 65,
+        "sound": "triangle",
+        "note": 43,
         "rhythm": "x",
         "modulations": {
           "lowpass": {
@@ -250,14 +250,14 @@
     "fps": false
   },
   "camera": {
-    "yaw": -25.5485169022,
-    "elevation": 31.344370215,
-    "distance": 80.5554354262,
+    "yaw": 38.6806676693,
+    "elevation": 7.4594071389,
+    "distance": 56.7416322463,
     "offsetX": 0,
     "offsetY": 0,
     "offsetZ": 0
   },
-  "version": 3,
+  "version": 4,
   "sketch": "11-rust",
   "lighting": {
     "spotlight": {

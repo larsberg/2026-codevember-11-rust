@@ -13,6 +13,11 @@ export function createAudio({ load = () => import('@strudel/web'), onError = con
   let active = false, waitingForInteraction = false, operation = 0, eventCount = 0, failed = false;
   let currentMove, recentNotes = [];
   let effects, synthSettings, synthEnds = [], modulatedAt = -Infinity;
+  const sceneMix={levels:[1,1],pans:[0,0]};
+  function applySceneMix() {
+    if(!synthSettings)return;
+    synthSettings.voices.forEach((voice,i)=>{voice.level=settings.voices[i].level*sceneMix.levels[i];voice.pan=Math.max(0,Math.min(1,settings.voices[i].pan+sceneMix.pans[i]));});
+  }
   let analysis; const silence = silentAnalysis();
   const positions = new Float64Array(48); let floor = 0;
   const wanted = () => !disposed && running && settings?.enabled;
@@ -66,6 +71,7 @@ export function createAudio({ load = () => import('@strudel/web'), onError = con
       const onset = Number(hap.whole?.begin);
       if (!hap.hasOnset() || onset <= event.from || onset >= 1 || onset > event.to + 1e-9) continue;
       const voice = hap.value, duration = Number(hap.duration) * event.duration;
+      if(event.voices&&!event.voices.includes(voice))continue;
       if (Number.isFinite(synthMaxVoices)) {
         synthEnds = synthEnds.filter(end => end > context.currentTime);
         if (synthEnds.length >= synthMaxVoices) continue;
@@ -111,13 +117,17 @@ export function createAudio({ load = () => import('@strudel/web'), onError = con
     get modulation() { return settings?.voices.map(voice => modulateVoice(voice, positions, floor).routes) ?? []; },
     configure(next) {
       const changedEnabled = settings?.enabled !== next.enabled;
-      settings = structuredClone(next); synthSettings = { ...settings, volume: settings.volume * synthLevel };
+      settings = structuredClone(next); synthSettings = { ...settings, volume: settings.volume * synthLevel,voices:settings.voices.map(voice=>({...voice})) };applySceneMix();
       refresh(); if (active) syncModulation();
       if (!settings.enabled) { if (changedEnabled || active || busy) halt(); }
       else if (!running) status('Sounds enabled · paused with sketch');
       else if (changedEnabled) { failed = false; void start(); }
     },
     async unlock() { failed = false; return start(); },
+    setScene(value) {
+      sceneMix.levels=value.levels.map(v=>Math.max(0,Math.min(1,v)));
+      sceneMix.pans=value.pans.map(v=>Math.max(-.2,Math.min(.2,v)));applySceneMix();
+    },
     update(_dt, play, nextPositions, nextFloor = floor, events = [], move) {
       if (nextPositions) { positions.set(nextPositions); floor = nextFloor; }
       if (move) currentMove = move;

@@ -12,9 +12,10 @@ export class RustSimulation {
     this.object.position.y=this.radius+.025;
     this.geometry=createRustTubeGeometry(this.length);
     this.sparkEntries=[];this.recoilImpulses=0;this.rig=[];
+    this.audioLanding={speed:0,point:new Vector3()};
     this.reaction={index:3,targetIndex:3,energy:0,lastStrike:-Infinity,normal:new Vector3(0,0,1)};
     this.physics=createPhysics(settings.physics);
-    this.ground=this.physics.addBody({body:{type:'static',position:{x:0,y:-this.scale,z:0}},shapes:[{type:'box',halfExtents:{x:1000,y:this.scale,z:1000}}]});
+    this.ground=this.physics.addBody({body:{type:'static',position:{x:0,y:-this.scale,z:0}},shapes:[{type:'box',halfExtents:{x:1000,y:this.scale,z:1000},enableHitEvents:true}]});
     this.restCenters=Array.from({length:7},(_,i)=>((i+.5)/7-.5)*this.length);
     const step=this.restCenters[1]-this.restCenters[0],p=this.geometry.attributes.position;
     for(let i=0;i<7;i++) {
@@ -39,6 +40,13 @@ export class RustSimulation {
     this.geometry.setAttribute('skinIndex',new Uint16BufferAttribute(indices,4));
     this.geometry.setAttribute('skinWeight',new Float32BufferAttribute(weights,4));
     this.entry=this.rig[3];this.position=new Float64Array(48);
+    const floorId=this.ground.shapes[0].getUserData(),rigIds=new Set(this.rig.flatMap(entry=>entry.shapes.map(shape=>shape.getUserData())));
+    this.physics.onAfterStep(()=>{
+      for(const event of this.physics.world.getContactEvents().hit) {
+        const rigContact=(event.shapeUserDataA===floorId&&rigIds.has(event.shapeUserDataB))||(event.shapeUserDataB===floorId&&rigIds.has(event.shapeUserDataA));
+        if(rigContact&&event.approachSpeed>this.audioLanding.speed){this.audioLanding.speed=event.approachSpeed;this.audioLanding.point.copy(event.point);}
+      }
+    });
     this.physics.onBeforeStep(()=>this.drive());this.configure(settings);this.sync();
   }
   influences(x) {
@@ -117,6 +125,7 @@ export class RustSimulation {
     entry.body.setTransform(point,{x:0,y:0,z:0,w:1});entry.body.setLinearVelocity(velocity);entry.body.setAwake(true);
   }
   retireSpark(index) {const entry=this.sparkEntries[index];if(entry)this.physics.removeBody(entry);this.sparkEntries[index]=null;}
+  takeAudioLanding() {const event={speed:this.audioLanding.speed,point:this.audioLanding.point.clone()};this.audioLanding.speed=0;return event;}
   sync() {
     this.revision=(this.revision??0)+1;this.center??=new Vector3();this.center.set(0,0,0);
     for(const entry of this.rig) {

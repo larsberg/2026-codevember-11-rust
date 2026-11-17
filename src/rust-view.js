@@ -1,12 +1,11 @@
 import {
-  AdditiveBlending, Box3, DoubleSide, BufferAttribute, BufferGeometry, Color, CylinderGeometry, EdgesGeometry, Float32BufferAttribute,
-  Group, LineBasicMaterial, LineDashedMaterial, LineSegments, Mesh, MeshBasicMaterial, MeshStandardMaterial,
-  PointLight, Points, PointsMaterial, SkinnedMesh, Raycaster, TorusGeometry, Vector2, Vector3,
+  AdditiveBlending, DoubleSide, BufferAttribute, BufferGeometry, Color, CylinderGeometry, Float32BufferAttribute,
+  Group, LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial, MeshStandardMaterial,
+  PointLight, Points, PointsMaterial, Quaternion, SkinnedMesh, Raycaster, TorusGeometry, Vector2, Vector3,
 } from 'three';
 import { createLaserStands } from './laser-stands.js';
 import { RustMask } from './rust-mask.js';
 import { applyMaterialSettings } from './material-settings.js';
-import { paletteSwatches } from './palette-library.js';
 const noiseGLSL = `
 float rhash(vec3 p) { p=fract(p*.3183099+vec3(.1,.2,.3)); p*=17.; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
 float rnoise(vec3 p) {
@@ -66,28 +65,10 @@ export function createRustView(scene, simulation) {
       for(let i=0;i<p.count;i++){cube.getVertexPosition(i,point);p.setXYZ(i,point.x,point.y,point.z);}
       p.needsUpdate=true;pickGeometry.computeBoundingBox();pickGeometry.computeBoundingSphere();
       cube.boundingBox=pickGeometry.boundingBox.clone();cube.boundingSphere=pickGeometry.boundingSphere.clone();
-      const edge=outline.geometry.attributes.position;
-      for(let i=0;i<edge.count;i++) {
-        const point=simulation.deformPoint(new Vector3().fromArray(outlineRest,i*3)).sub(cube.position);
-        edge.setXYZ(i,point.x,point.y,point.z);
-      }
-      edge.needsUpdate=true;
       bakedRevision=simulation.revision;
     }
     pickMesh.position.copy(cube.position);pickMesh.quaternion.copy(cube.quaternion);pickMesh.updateMatrixWorld(true);
   }
-  const ink = new LineBasicMaterial({ color: '#514735', transparent: true, opacity: .33 });
-  const outline = new LineSegments(new EdgesGeometry(simulation.geometry, 24), ink); cube.add(outline);
-  const outlineRest=outline.geometry.attributes.position.array.slice();
-  const s = simulation.settings.rust.size / 2, y = .012;
-  const projected = [];
-  for (const x of [-s,s]) for (const z of [-s,s]) projected.push(x,y,z, x,s*2+.015,z);
-  for (const z of [-s,s]) projected.push(-s,y,z,s,y,z);
-  for (const x of [-s,s]) projected.push(x,y,-s,x,y,s);
-  projected.push(-s-1,y,0,s+1,y,0,0,y,-s-1,0,y,s+1);
-  const guideGeometry = new BufferGeometry(); guideGeometry.setAttribute('position',new Float32BufferAttribute(projected,3));
-  const guideMaterial = new LineDashedMaterial({ color: '#716655', transparent:true, opacity:.28, dashSize:.12,gapSize:.09 });
-  const guides = new LineSegments(guideGeometry,guideMaterial); guides.computeLineDistances(); group.add(guides);
   const laserMaterial = new MeshBasicMaterial({ color: new Color(7,1.25,.18), transparent:true, opacity:.8, blending:AdditiveBlending, depthWrite:false });
   const beam = new Mesh(new CylinderGeometry(.018,.026,1,8),laserMaterial); beam.name='Laser core'; group.add(beam);
   const FAN_RAYS=25;
@@ -102,6 +83,8 @@ export function createRustView(scene, simulation) {
   const fan=new LineSegments(fanGeometry,fanMaterial);fan.name='Laser scan lines';fan.frustumCulled=false;group.add(fan);
   const ring = new Mesh(new TorusGeometry(1,.014,6,48),laserMaterial); group.add(ring);
   const stands=createLaserStands(scene,simulation.length,simulation.scale,materials);
+  const aiming=new Map(stands.stations.map(station=>[station,{initialized:false,fanTangent:null}]));
+  const targetOrientation=new Quaternion();
   const particleCount=192, positions=new Float32Array(particleCount*3), velocities=new Float32Array(particleCount*3), lives=new Float32Array(particleCount),ages=new Float32Array(particleCount),sparkColors=new Float32Array(particleCount*3);
   const particleGeometry=new BufferGeometry(); particleGeometry.setAttribute('position',new BufferAttribute(positions,3));particleGeometry.setAttribute('color',new BufferAttribute(sparkColors,3));
   const particleMaterial=new PointsMaterial({ vertexColors:true,color:0xffffff, size:.035, transparent:true, opacity:.85, blending:AdditiveBlending, depthWrite:false });
@@ -116,11 +99,10 @@ export function createRustView(scene, simulation) {
   const dustMaterial=new PointsMaterial({color:'#b39772',size:.032*simulation.scale,transparent:true,opacity:.72,depthWrite:false});
   const dust=new Points(dustGeometry,dustMaterial);dust.name='Settled rust dust';dust.frustumCulled=false;group.add(dust);
   let dustCursor=0;
-  const bounds=new Box3();
   let settings=simulation.settings, hit=null, active=false, disposed=false, lastUv=null;
-  const fanImpacts=[];
+  const fanImpacts=[],lastContactPoint=new Vector3();
   const caster=new Raycaster(), ndc=new Vector2(), up=new Vector3(0,1,0), normal=new Vector3(), origin=new Vector3(), delta=new Vector3();
-  function configure(next,palette) {
+  function configure(next) {
     settings=next;
     for(const station of stands.stations)station.setFanRadius(settings.rust.radius*5*simulation.scale);
     for(const [key, material] of Object.entries(materials)) {
@@ -130,9 +112,6 @@ export function createRustView(scene, simulation) {
       material.envMapRotation.y=settings.lighting.environment.rotation*Math.PI/180;
     }
     uniforms.rustColor.value.copy(materials.struts.color); uniforms.rustRough.value=materials.struts.roughness; uniforms.rustMetal.value=materials.struts.metalness;
-    const colors=palette?paletteSwatches(palette):['#514735']; ink.color.set(colors[0]);guideMaterial.color.set(colors[0]);
-    outline.visible=settings.shape.construction&&settings.drafting.ink;
-    guides.visible=settings.shape.construction&&settings.drafting.guides;
   }
   function pick(clientX,clientY,rect,camera) {
     ndc.set((clientX-rect.left)/rect.width*2-1,-(clientY-rect.top)/rect.height*2+1);
@@ -188,13 +167,6 @@ export function createRustView(scene, simulation) {
     if(dt===0&&lastVisualRevision===simulation.revision&&lastVisualHit===hit&&lastVisualRunning===running)return;
     lastVisualRevision=simulation.revision;lastVisualHit=hit;lastVisualRunning=running;
     cube.position.copy(simulation.object.position);cube.quaternion.copy(simulation.object.quaternion); updateSkin();
-    bounds.setFromObject(cube);
-    const projection=[];
-    for(const x of [bounds.min.x,bounds.max.x])for(const z of [bounds.min.z,bounds.max.z])projection.push(x,simulation.floor+.012,z,x,bounds.max.y,z);
-    for(const z of [bounds.min.z,bounds.max.z])projection.push(bounds.min.x,simulation.floor+.012,z,bounds.max.x,simulation.floor+.012,z);
-    for(const x of [bounds.min.x,bounds.max.x])projection.push(x,simulation.floor+.012,bounds.min.z,x,simulation.floor+.012,bounds.max.z);
-    projection.push(bounds.min.x-.5,.012,cube.position.z,bounds.max.x+.5,.012,cube.position.z,cube.position.x,.012,bounds.min.z-.5,cube.position.x,.012,bounds.max.z+.5);
-    guideGeometry.attributes.position.array.set(projection);guideGeometry.attributes.position.needsUpdate=true;guides.computeLineDistances();
     beam.visible=ring.visible=false;fan.visible=sheet.visible=active&&running;
     fanImpacts.length=0;
     let rayCount=0,triangleCount=0;
@@ -202,10 +174,14 @@ export function createRustView(scene, simulation) {
     for(const [laserIndex,station] of stands.stations.entries()) {
       station.light.intensity=0;
       if(!hit)continue;
-      const gunAxis=station.pivot.clone().sub(hit.point).normalize();
-      station.head.quaternion.setFromUnitVectors(up,gunAxis);
+      const motion=aiming.get(station),blend=-Math.expm1(-10*Math.max(0,dt));
+      targetOrientation.setFromUnitVectors(up,station.pivot.clone().sub(hit.point).normalize());
+      // Initialize before the first emission, then ease every subsequent retarget.
+      if(!motion.initialized){station.head.quaternion.copy(targetOrientation);motion.initialized=true;}
+      else station.head.quaternion.slerp(targetOrientation,blend);
+      const gunAxis=up.clone().applyQuaternion(station.head.quaternion);
       origin.copy(station.pivot).addScaledVector(gunAxis,-.8*simulation.scale);station.nozzle.copy(origin);
-      caster.set(origin,hit.point.clone().sub(origin).normalize());
+      caster.set(origin,gunAxis.clone().negate());
       const sourceHit=intersectionHit();
       if(!sourceHit)continue;
       const travel=hit.travelDirection?.clone()??up.clone();
@@ -213,8 +189,17 @@ export function createRustView(scene, simulation) {
       if(travel.lengthSq()<1e-8)travel.copy(Math.abs(sourceHit.localNormal.y)>.9?new Vector3(0,0,1):up);
       sourceHit.fanTangent=new Vector3().crossVectors(sourceHit.localNormal,travel.normalize()).normalize();
       sourceHit.fanHalfWidth=settings.rust.radius*5*simulation.scale;
-      const tangent=sourceHit.fanTangent.clone().applyQuaternion(simulation.rotationAt(sourceHit.localPoint.x));
-      normal.copy(sourceHit.worldNormal);workingHits.push(sourceHit);
+      const surfaceRotation=simulation.rotationAt(sourceHit.localPoint.x);
+      const tangent=sourceHit.fanTangent.clone().applyQuaternion(surfaceRotation);
+      if(motion.fanTangent) {
+        // A fan axis is undirected: choose the nearest equivalent orientation at turns.
+        if(tangent.dot(motion.fanTangent)<0)tangent.negate();
+        tangent.lerpVectors(motion.fanTangent,tangent,blend);
+      }
+      tangent.addScaledVector(sourceHit.worldNormal,-tangent.dot(sourceHit.worldNormal)).normalize();
+      motion.fanTangent=tangent.clone();
+      sourceHit.fanTangent.copy(tangent).applyQuaternion(surfaceRotation.clone().invert());
+      normal.copy(sourceHit.worldNormal);lastContactPoint.copy(sourceHit.point);workingHits.push(sourceHit);
       let previousImpact=null,sourceRays=0;
       for(let i=0;i<FAN_RAYS;i++) {
         const time=simulation.time+laserIndex*.17,jitter=(Math.sin(time*71+i*13)*.32+Math.sin(time*107+i*3.7)*.18)/FAN_RAYS;
@@ -274,8 +259,9 @@ export function createRustView(scene, simulation) {
     }
   }
   return { group,cube,mask,materials,stands,configure,update,pick,automaticTarget,setTarget,
+    get soundState(){return {removed:mask.cleaned,sparks:particleCursor,dust:dustCursor,contactPoint:lastContactPoint,lampPoint:stands.stations[0].pivot};},
     get working(){return active&&fanImpacts.length>0;}, get diagnostics(){return { coverage:mask.coverage, cleaned:mask.cleaned, lastUv, working:active, lasers:stands.stations.length, fanRays:fanGeometry.drawRange.count/2,dust:Math.min(dustCursor,dustCount), maskSize:[mask.texture.image.width,mask.texture.image.height] };},
-    dispose(){if(disposed)return;disposed=true;scene.remove(group);stands.dispose();mask.dispose();pickGeometry.dispose();pickMaterial.dispose();outline.geometry.dispose();ink.dispose();guideGeometry.dispose();guideMaterial.dispose();particleGeometry.dispose();particleMaterial.dispose();fanGeometry.dispose();fanMaterial.dispose();sheetGeometry.dispose();sheetMaterial.dispose();streakGeometry.dispose();dustGeometry.dispose();dustMaterial.dispose();
+    dispose(){if(disposed)return;disposed=true;scene.remove(group);stands.dispose();mask.dispose();pickGeometry.dispose();pickMaterial.dispose();particleGeometry.dispose();particleMaterial.dispose();fanGeometry.dispose();fanMaterial.dispose();sheetGeometry.dispose();sheetMaterial.dispose();streakGeometry.dispose();dustGeometry.dispose();dustMaterial.dispose();
       for(const mesh of [beam,ring])mesh.geometry.dispose();laserMaterial.dispose();Object.values(materials).forEach(m=>m.dispose());}
   };
 }

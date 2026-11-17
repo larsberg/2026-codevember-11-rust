@@ -6,7 +6,7 @@ export function synthControlsMarkup() {
     const [label,, min, max, step] = voiceFields[key], id = `synth-${voice}-${key}`;
     return `<label class="slider-label" for="${id}">${label}<output></output></label><input id="${id}" data-synth-voice="${voice}" data-synth-key="${key}" type="range" min="${min}" max="${max}" step="${step}">`;
   };
-  return `<p class="camera-hint">Ground contacts make quiet rubber taps, soft tabletop knocks and short plastic shuffles. Volume controls the mix. Enable either synth voice below to add quiet musical accents; body heights shape their filters and effects.</p>` + defaultVoices().map((voice, i) => `
+  return `<p class="camera-hint">The laser carries a quiet hum; removed rust adds sizzle. Tube bending, sparks, settling dust and floor impacts add sparse textures. Volume controls the mix. Voice 1 controls the laser layer; Voice 2 controls the tube and debris. Body heights can modulate their synth effects.</p>` + defaultVoices().map((voice, i) => `
     <details class="material-group" open><summary>Voice ${i + 1} · ${VOICE_NAMES[i]}</summary>
       <label class="lighting-toggle"><input type="checkbox" id="synth-${i}-enabled" data-synth-voice="${i}" data-synth-key="enabled">Enabled</label>
       <label class="audio-field">Waveform<select id="synth-${i}-sound" data-synth-voice="${i}" data-synth-key="sound">${waveforms.map(s => `<option value="${s}">${s}</option>`).join('')}</select></label>

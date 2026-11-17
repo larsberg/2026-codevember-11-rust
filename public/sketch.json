@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-codevember-11-rust",
+  "title": "Rust",
+  "created": "2026-11-11",
+  "date": "2026-11-11",
+  "datePrecision": "day",
+  "author": "Lars Berg",
+  "entry": "./",
+  "description": "A black task-lamp laser strips rust from a curling, skinned metal tube under a spotlight, scattering sparks and settling dust.",
+  "protocol": "sketch-player:v1",
+  "capabilities": [
+    "play",
+    "pause",
+    "reset",
+    "get-setup",
+    "setup",
+    "save-setup",
+    "load-setup"
+  ],
+  "sound": "gesture-required",
+  "audio": "gesture-required",
+  "tags": [
+    "codevember",
+    "threejs",
+    "physics",
+    "strudel",
+    "interactive",
+    "lasers",
+    "rust"
+  ],
+  "madeWith": [
+    "threejs",
+    "box3d",
+    "strudel",
+    "web-audio"
+  ],
+  "thumbnail": {
+    "src": "./thumbnail.jpg",
+    "width": 1600,
+    "height": 900,
+    "alt": "A black lamp projects an orange laser fan onto a rusting rectangular metal tube under a bright spotlight."
+  },
+  "embed": {
+    "src": "./?embed=1",
+    "allow": [
+      "autoplay",
+      "fullscreen"
+    ],
+    "resize": "container",
+    "controls": [
+      "play",
+      "pause",
+      "reset",
+      "get-setup",
+      "setup",
+      "save-setup",
+      "load-setup"
+    ],
+    "protocol": "sketch-player:v1",
+    "parentOriginParameter": "parentOrigin"
+  },
+  "repository": "https://github.com/larsberg/2026-codevember-11-rust",
+  "url": "https://larsberg.github.io/2026-codevember-11-rust/"
+}

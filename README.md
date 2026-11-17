@@ -40,7 +40,7 @@ Floor impacts retire their bodies and deposit persistent dust in a bounded pool.
 `laser-stands.js` builds one fixed lamp matching the supplied reference: a low
 round weighted base, paired slim lower links, an elbow, a single upper link,
 visible hinge pins and balance springs, and a cylindrical head with a recessed circular face. Its radius tracks
-the fan half-width at the impact, including live changes to the laser radius. The housing and stand share matte black powder-coat material settings;
+one quarter of the fan half-width at the impact, including live changes to the laser radius. The housing and stand share matte black powder-coat material settings;
 only the shade/head pivots to aim. One 25-ray fan replaces the three-source
 version, removing the extra intersection and mask passes. Recoil uses the full
 single-source time step. `spotlight-floor.js` masks the floor to the actual
@@ -62,6 +62,25 @@ or direct animation of body transforms is used. Each section has four flat-wall 
 the [native createBox implementation](https://github.com/monteslu/box3d-wasm/blob/main/csrc/glue.cpp#L1048). At the enlarged scale, the preset also
 scales gravity, gun, particles, camera and spotlight for comparable dynamics.
 
+## Reactive sound
+
+The inherited Strudel engine layers a quiet, overlapping laser carrier with
+six procedural textures: sizzle, metal creak, spark ticks, settling dust,
+floor knocks and soft contact clicks. Rust actually removed from the UV mask
+controls the sizzle. Native body angular velocity and adjacent-bone bending
+control creaks; Box3D tube/floor hit speeds control knocks. Spark and dust
+counters produce sparse accents rather than one sound per particle. Screen
+position supplies restrained stereo placement. Existing Audio controls own
+master volume, mute and both voice layers; no extra controls were added.
+
+`rust-sounds.js` bakes three short variants of each texture once, about 0.7 MB
+at 48 kHz, and registers them as native Strudel sample voices. Sample playback
+is capped at six concurrent voices, ten starts per second and a four-start burst;
+synth playback has its own six-voice cap. Control signals update at 25 Hz, with
+no downloads or per-frame audio-buffer generation. Mute, pause and hidden tabs
+stop playback, and resuming discards accumulated events. Version 4 upgrades only
+untouched old synth patches, preserving user volume, mute and customized voices.
+
 ## Inheritance inventory
 
 Base: **`../01-fold`**, copied before subject replacement. Also inspected the
@@ -78,17 +97,15 @@ fuller studio implementations in **`../02-shatter-drafting`** and
 | Key, fill, hemisphere, spotlight, shadows and environment reflections | Fold `lighting-controls.js`, `lighting-settings.js`, `shadows.js` |
 | Material editor, roughness, metallic response, emission and opacity | Fold `material-controls.js`, `material-settings.js`; Rust endpoint defaults |
 | Contact AO, bloom and camera tilt blur | Fold `scene-effects.js`, `tilt-focus.js` |
-| Paper grain and drawing PNG export | Fold `drawing-plate.js`, shell export action |
+| PNG export | Fold shell export action; drafting overlays and paper grain retired |
 | Gallery player integration | Fold `player-bridge.js` |
 | Atomic JSON setup API, ownership checks and schema validation | Fold `server/setup-api.js`, `persistence.js`, Rust identity |
 
 Deliberate subject changes: the folding assembly, hinge commands, composition
 and recorded clacks are replaced by the skinned tube, oxidation controls and automatic
-laser sound. The jointed rig bends through applied physics torques and has no grab spring. The palette colors the
-construction ink; the material editor owns the metal/rust endpoints. Ground audio
+laser sound. The jointed rig bends through applied physics torques and has no grab spring. The palette workshop remains available for saved palette libraries; the material editor owns the metal/rust endpoints. Drafting controls, construction edges, projection guides and paper grain are removed from the scene, including when reading legacy saves. Ground audio
 scopes and presentation/recording editors from Shatter are not part of Fold's
-shell or this subject. Publishing/gallery scripts and Fold release metadata are
-not carried into this local sketch.
+shell or this subject. Release tooling and the Pages workflow follow `../10-caustic`, with Rust-specific metadata and a real browser-captured thumbnail.
 
 ## Settings and verification
 
@@ -114,3 +131,39 @@ Browser QA uses the user's existing shared tab. Verified actual ownership
 response, live material/environment/exposure/bloom/focus/FPS/camera controls,
 subject rebuild, Save/Reload equality and Reset defaults, actual skin deformation,
 local recoil, noisy fan rays, dust deposits, spotlight shadows and Strudel start/stop. The user's saved setup is restored after verification.
+
+## Build and deployment
+
+Release preparation follows `../10-caustic`: relative Vite assets, bundled preset,
+production-only per-device saves, the trusted gallery player bridge, metadata,
+social previews, a real 1600 × 900 browser capture, and `.nojekyll`.
+Development retains API-only Save/Reload with the `11-rust` ownership check.
+`public/sketch.json` identifies the intended repository and Pages address as
+`larsberg/2026-codevember-11-rust`. The generated gallery entry starts hidden;
+gallery registration is separate from release preparation.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm check
+pnpm check:release
+```
+
+`dist/` contains the complete static release, including Box3D WASM and locally
+bundled Strudel. The release check verifies metadata, relative asset paths,
+thumbnail dimensions, the saved preset, and the absence of development files.
+`.github/workflows/pages.yml` builds, verifies and deploys `dist/` when main is
+pushed, using GitHub Pages with **GitHub Actions** as its source. `pnpm deploy`
+runs local checks and pushes source; the workflow performs the public deployment:
+
+```sh
+pnpm publish:source --dry-run
+pnpm deploy
+```
+
+Before publishing, create the intended GitHub repository if needed, configure
+`origin` to the repository declared in `public/sketch.json`, and commit source on
+`main`. Publishers check repository identity; source publishing requires a clean
+checkout. The optional legacy `pnpm publish:pages` command publishes only `dist/`
+to `gh-pages`; use it only with Pages configured for **gh-pages / root**, instead
+of the default Actions workflow. Do not run both publishers. No repository, push, public deployment or
+gallery update is performed by release preparation alone.

@@ -97,7 +97,7 @@ export class RustMask {
       this.data[k] = this.data[k + 1] = this.data[k + 2] = v; this.data[k + 3] = 255;
       if (this.valid[i]) { total += this.amount[i]; count++; }
     }
-    this.coverage = total / count; this.texture.needsUpdate = true;
+    this.validCount=count;this.coverage = total / count; this.texture.needsUpdate = true;
   }
   valueAt(uv) {
     return this.amount[Math.min(MASK_HEIGHT - 1, Math.max(0, Math.floor(uv.y * MASK_HEIGHT))) * MASK_WIDTH + Math.min(MASK_WIDTH - 1, Math.max(0, Math.floor(uv.x * MASK_WIDTH)))];
